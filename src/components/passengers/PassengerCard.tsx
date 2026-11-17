@@ -17,6 +17,7 @@ interface PassengerCardProps {
   onSelect: (passengerId: string) => void;
   onRename: (passengerId: string, name: string) => void;
   onRemoveSeat: (passengerId: string) => void;
+  onEditMeal: (passengerId: string) => void;
 }
 
 export function PassengerCard({
@@ -27,6 +28,7 @@ export function PassengerCard({
   onSelect,
   onRename,
   onRemoveSeat,
+  onEditMeal,
 }: PassengerCardProps) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -99,12 +101,28 @@ export function PassengerCard({
         )}
       </div>
 
-      {meal && (
-        <p className="text-xs text-ink-muted">
-          Meal: {meal.name} ·{' '}
-          <span className="tabular-nums">{formatCurrency(meal.price)}</span>
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-xs text-ink-muted">
+          Meal: {meal ? meal.name : 'None'}
+          {meal && (
+            <>
+              {' · '}
+              <span className="tabular-nums">{formatCurrency(meal.price)}</span>
+            </>
+          )}
         </p>
-      )}
+        <button
+          type="button"
+          aria-label={`Choose meal for ${passenger.name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onEditMeal(passenger.id);
+          }}
+          className="shrink-0 rounded-md border border-line bg-surface px-2 py-1 text-xs font-semibold hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Meal
+        </button>
+      </div>
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import { MEAL_OPTIONS } from '@/data/meals';
+import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
 import type { BookingState } from '@/state/bookingReducer';
 import type { MealOption, Passenger, Seat, SeatStatus } from '@/types';
 
@@ -197,4 +197,18 @@ export function getMealSummaryLines(
       ? [{ passengerId: passenger.id, passengerName: passenger.name, meal }]
       : [];
   });
+}
+
+/** Option id highlighted in the picker; a passenger without a meal has "No meal". */
+export function getSelectedMealOptionId(
+  state: BookingState,
+  passengerId: string,
+): string {
+  const passenger = state.passengers.find((p) => p.id === passengerId);
+  return passenger?.mealId ?? NO_MEAL_ID;
+}
+
+/** True when there is anything to price: a seat or a meal. */
+export function hasPricedSelections(state: BookingState): boolean {
+  return getAssignedCount(state) > 0 || getMealSummaryLines(state).length > 0;
 }

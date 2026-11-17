@@ -6,7 +6,7 @@ Personal learning doc: written so I can explain this project in an interview. Up
 
 A single-page app where a user picks an aircraft layout (3-2 or 2-3-2), views a seat map, adds passengers, assigns each passenger a seat (priced by category), optionally picks meals, and sees a running price summary. All data is mock and deterministic; there is no backend.
 
-Status: **foundation, state and seat map UI done** (types, layouts, pricing, seat generation, reducer, selectors, context, seat map with layout toggle, legend, toasts, confirm dialog). `src/app/page.tsx` is a temporary preview page. Passenger panel, summary and meals UI are TBD.
+Status: **seat selection, passenger panel, price summary and meal selection done** (types, layouts, pricing, seat generation, reducer, selectors, context, seat map, passenger panel, summary, Seats / Meals tabs, meal picker).
 
 ## 2. Tech stack & why
 
@@ -30,7 +30,7 @@ src/
     cabin.ts                  EXIT_ROWS (rows beside an emergency exit)
     flight.ts                 Mock route shown in the header (DEL → BOM · 6E 2134 · Fri, 21 Nov)
     seatPricing.ts            Category prices, pricing rules, overrides, deterministic occupancy
-    meals.ts                  Meal options (stub, TBD)
+    meals.ts                  MEAL_OPTIONS (6 items, free + paid, veg / non-veg) and NO_MEAL_ID
     mockApi.ts                Fake async fetch (stub, TBD)
   lib/
     generateSeatMap.ts        Builds Seat[] from a layout
@@ -42,7 +42,8 @@ src/
     selectors.ts              Pure derived data (status, owner, totals, breakdown)
   context/
     BookingContext.tsx        Provider + useBooking / useBookingActions / useSeatClick
-    AppProviders.tsx          Composes ToastProvider + BookingProvider
+    ViewContext.tsx           UI-only active tab (`seats` | `meals`): ViewProvider + useMainView
+    AppProviders.tsx          Composes ToastProvider + BookingProvider + ViewProvider
   components/
     seat-map/
       SeatMap.tsx             Cabin shell: nose, column header, grid, EXIT marker, keyboard nav, click + toast
@@ -58,12 +59,14 @@ src/
       seatNavigation.ts       Pure arrow-key navigation over the seat grid (+ test)
     layout/
       AppHeader.tsx           Title, route mock, Reset button (confirms if seats are assigned)
+      MainArea.tsx            Tab switcher + active panel (seat map block or meal picker)
+      MainTabs.tsx            Seats | Meals `role=tablist`, arrow-key switching
     passengers/
       PassengerPanel.tsx      Card shell: count stepper, progress, cards (md+) or chips (mobile)
       PassengerCountSelector.tsx  − / count / + stepper (1–6), helper text, confirm before dropping seated passengers
       PassengerProgress.tsx   "2 of 3 passengers seated" + progress bar
       PassengerList.tsx       Maps passengers to cards, wires actions + "seat removed" toast
-      PassengerCard.tsx       One passenger: name, edit, seat badge, category + price, meal, remove seat
+      PassengerCard.tsx       One passenger: name, edit, seat badge, category + price, meal line + "Meal" button, remove seat
       InlineNameEditor.tsx    Input that saves on Enter/blur and cancels on Esc
       PassengerChips.tsx      Mobile horizontally scrollable passenger switcher
       SeatBadge.tsx           Seat id pill or muted "No seat"
@@ -73,7 +76,10 @@ src/
       BookingSuccessDialog.tsx  Mock confirmation modal
       SummarySidebar.tsx      md+ summary card (sticky on lg) + owns the success dialog
       MobileSummaryBar.tsx    <md sticky bottom bar (total) that expands into a sheet
-    meals/                    Meal picker (TBD)
+    meals/
+      MealSelector.tsx        Grid of meal cards for the active passenger
+      MealCard.tsx            One option: diet mark, name, description, price/"Free", selected state
+      DietIndicator.tsx       Green (veg) / red (non-veg) dot-in-square mark
     ui/
       Button.tsx              Button with primary / secondary / danger variants (`aria-disabled` styled like `disabled`)
       IconButton.tsx          36px icon-only button; `label` is required (aria-label + title)
@@ -94,7 +100,7 @@ src/
 - **Seat** — `{ id: "12C", row, column, category, price, isOccupied, position }`. Static facts about a seat. Who sits there is stored on the passenger, not the seat.
 - **LayoutConfig** — `{ id, label, columnGroups: string[][], rows }`. Aisles sit between column groups.
 - **Passenger** — `{ id, name, seatId | null, mealId | null }`. Single source of truth for assignments (seat → passenger is derived).
-- **MealOption** — `{ id, name, description, price, isVeg }`.
+- **MealOption** — `{ id, name, description, price, isVeg }`. The "No meal" card is a real option (`NO_MEAL_ID`, ₹0) but a passenger without a meal stores `mealId: null`.
 
 ## 5. State management
 
@@ -166,9 +172,11 @@ All under `src/components/`. Business rules never live here: components call sel
 | `PassengerPanel` | `passengers/PassengerPanel.tsx` | Groups selector, progress and the switcher; shows cards from `md`, chips below (CSS only) | none |
 | `PassengerCountSelector` | `passengers/PassengerCountSelector.tsx` | Stepper 1–6; buttons `disabled` at the limits; helper text changes at the limits. If `getSeatedPassengersRemovedBy` > 0 a `ConfirmDialog` asks first | none |
 | `PassengerProgress` | `passengers/PassengerProgress.tsx` | "2 of 3 passengers seated" + `role="progressbar"` | none |
-| `PassengerList` / `PassengerCard` | `passengers/` | One card per passenger. Active card: accent border + `aria-current`, and its name button has `aria-pressed`. The whole card is clickable. Pencil edits the name inline, ✕ removes the seat | card: `passenger, seat, meal, isActive, onSelect, onRename, onRemoveSeat` |
+| `PassengerList` / `PassengerCard` | `passengers/` | One card per passenger. Active card: accent border + `aria-current`, and its name button has `aria-pressed`. The whole card is clickable. Pencil edits the name inline, ✕ removes the seat, "Meal" makes them active and switches to the Meals tab. The card shows "Meal: name · price" or "Meal: None" | card: `passenger, seat, meal, isActive, onSelect, onRename, onRemoveSeat, onEditMeal` |
+| `MainArea` / `MainTabs` | `layout/` | Seats / Meals tab switcher above the main area. Seats panel = title, layout toggle, legend, map. Meals panel = `MealSelector`. Passenger panel and summary stay visible in both | `MainArea`: `className?` |
+| `MealSelector` / `MealCard` / `DietIndicator` | `meals/` | Cards for the active passenger (`aria-pressed`); clicking dispatches `SELECT_MEAL`; the reducer toggles. Veg/non-veg shown as the Indian green/red mark (with an aria-label) | card: `meal, isSelected, onSelect` |
 | `PassengerChips` | `passengers/PassengerChips.tsx` | Mobile chips (name + seat badge), `aria-pressed` on the active one | none |
-| `PriceSummary` | `summary/PriceSummary.tsx` | Empty state or `PriceBreakdown`, plus Continue. Continue uses `aria-disabled` (stays focusable) with a tooltip "N passengers still need a seat" | `onContinue` |
+| `PriceSummary` | `summary/PriceSummary.tsx` | Empty state (nothing seated and no meal) or `PriceBreakdown`, plus Continue. Continue uses `aria-disabled` (stays focusable) with a tooltip "N passengers still need a seat" | `onContinue` |
 | `PriceBreakdown` | `summary/PriceBreakdown.tsx` | Lines "Passenger 1 · 12C (Premium) ₹250" ("Free" at 0), meal lines, Seats / Meals subtotal, Grand total. All from selectors | none |
 | `BookingSuccessDialog` | `summary/BookingSuccessDialog.tsx` | Mock confirmation with route + breakdown; "Done" or "New booking" (reset) | `open, onClose` |
 | `SummarySidebar` / `MobileSummaryBar` | `summary/` | Sidebar card for `md+`; fixed bottom bar for `<md` (total + "x of y seated") opening a bottom sheet | sidebar: `className?` |
@@ -248,6 +256,18 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
  click card or chip -> SET_ACTIVE_PASSENGER -> next seat click goes to that passenger
 ```
 
+**Meal selection**
+
+```
+ click "Meal" on a PassengerCard   -> SET_ACTIVE_PASSENGER + switch to Meals tab
+ (or Meals tab -> MealSelector shows the active passenger; switch passenger via cards/chips)
+ click a MealCard -> SELECT_MEAL { passengerId, mealId }
+   -> selectMeal(): unknown passenger/meal or mealsEnabled=false -> same state
+                    same meal again / null / NO_MEAL_ID          -> mealId = null
+                    otherwise                                     -> mealId = id
+ -> selectors: getMealSummaryLines / getMealsTotal / getGrandTotal -> PriceBreakdown, PassengerCard
+```
+
 **Summary and Continue**
 
 ```
@@ -285,6 +305,9 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 | `getUnassignedCount` | `src/state/selectors.ts` | state → number | Passengers still without a seat. |
 | `isBookingComplete` | `src/state/selectors.ts` | state → boolean | Gate for Continue: every passenger has a seat. |
 | `getSeatedPassengersRemovedBy` | `src/state/selectors.ts` | state, newCount → number | How many seated passengers shrinking would drop (decides the confirm dialog). |
+| `getSelectedMealOptionId` | `src/state/selectors.ts` | state, passengerId → option id | Which meal card is highlighted; "No meal" when `mealId` is null. |
+| `hasPricedSelections` | `src/state/selectors.ts` | state → boolean | True if any seat or meal exists; decides summary empty state. |
+| `selectMeal` (private) | `src/state/bookingReducer.ts` | state, passengerId, mealId → state | Validates passenger/meal, toggles, clears on `null` / No meal. |
 | `getPassengerMeal` | `src/state/selectors.ts` | state, passengerId (, meals) → `MealOption` or undefined | Meal shown on a card; undefined while meals are disabled. |
 | `getSeatSummaryLines`, `getMealSummaryLines` | `src/state/selectors.ts` | state → lines | Display-ready rows for the summary and success dialog (seated passengers only). |
 | `getPassengerInitial` | `src/lib/passengerInitial.ts` | name → string | Label shown on a selected seat ("R", "P2"). |
@@ -318,10 +341,11 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 - Passenger count is clamped to 1–6. Growing adds "Passenger N"; shrinking removes from the end, which frees their seats and meals automatically (ownership is on the passenger). If the active passenger is removed, the last remaining one becomes active.
 - Rename: trimmed, max 30 chars, empty → "Passenger N" (N = position).
 - Switching layout regenerates seats and clears every seat assignment (seat ids differ between layouts); meals are kept.
-- `mealsEnabled` is state (default `true`); when false, meal totals are 0. No action toggles it yet.
+- `mealsEnabled` is state (default `true`); when false, meal totals are 0 and `SELECT_MEAL` is ignored. No action toggles it yet.
+- Meals (INR): No meal ₹0, Standard Veg Sandwich Free, Paneer Tikka Wrap ₹300, Chicken Biryani ₹400 (non-veg), Fruit & Yogurt Bowl ₹200, Jain Meal ₹250. One meal per passenger; choosing the same meal again, or No meal, clears it. Meals are independent of seats (a passenger can have a meal before a seat). Meals count toward the grand total and are kept when the layout changes; removed passengers take their meal with them.
 - Shrinking the passenger count asks for confirmation only if a passenger who would be removed has a seat.
 - Continue is enabled only when every passenger has a seat (`isBookingComplete`). It uses `aria-disabled` rather than `disabled`, so keyboard users can focus it and read the tooltip.
-- Summary lines list seated passengers only; free seats show "Free". Meal lines and the Meals subtotal (₹0) are in place and fill once meals exist.
+- Seat lines list seated passengers only; free seats and free meals show "Free". Meal lines appear per passenger with a meal; the Meals subtotal is always shown.
 - Reset asks for confirmation only when seats are assigned, and returns to 1 passenger on the default layout.
 - Seats are at least 36px wide; the map scrolls horizontally rather than shrinking.
 - Totals are computed by selectors from seats + passengers; never stored.
@@ -359,7 +383,7 @@ Dispatch is stable. Components that only trigger actions don't re-render when st
 `getSeatOwnerMap` builds a seatId → passengerId `Map` per passengers array and caches it in a `WeakMap`. The reducer returns new arrays on change, so the cache never goes stale.
 
 **How is the reducer tested?**
-Vitest unit tests (`npm test`) cover click rules a–f, passenger shrinking, layout switching, totals and the invariant check. The reducer is pure, so tests need no React.
+Vitest unit tests (`npm test`) cover click rules a–f, passenger shrinking, layout switching, meal selection (select, replace, toggle off, unknown ids, free vs paid totals), totals and the invariant check. The reducer is pure, so tests need no React.
 
 **How is the seat map layout-agnostic?**
 `SeatMap` only reads `LayoutConfig.columnGroups` and `rows`. Aisles are rendered between groups, and the header and rows share one `CabinRow` component so columns always line up. Adding a layout needs no component changes.
@@ -390,3 +414,12 @@ In `isBookingComplete` (selectors). The component only reads it and the unassign
 
 **Why are totals never stored?**
 They are pure functions of seats and passengers, computed on render, so they cannot disagree with the data and update instantly on any change.
+
+**Why are the Seats / Meals tabs not in the reducer?**
+Which tab is open is pure UI state with no business rule, so it lives in a tiny `ViewContext`. It is a context (not local state) because the "Meal" button on a passenger card, far from the tabs, must be able to switch the tab.
+
+**Where is "one meal per passenger" enforced?**
+Structurally, `Passenger.mealId` is a single nullable field. The reducer's `selectMeal` also validates ids and implements the toggle, so components just dispatch the clicked id.
+
+**Why is "No meal" a card but stored as `null`?**
+It gives users an explicit option in the grid, while `null` keeps "no meal" out of the summary and totals without special cases.

@@ -3,6 +3,7 @@
 import { PassengerCard } from '@/components/passengers/PassengerCard';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
+import { useMainView } from '@/context/ViewContext';
 import { getPassengerMeal, getPassengerSeat } from '@/state/selectors';
 
 export function PassengerList() {
@@ -10,6 +11,7 @@ export function PassengerList() {
   const { setActivePassenger, renamePassenger, removeSeat } =
     useBookingActions();
   const { showToast } = useToast();
+  const { setView } = useMainView();
 
   return (
     <ul aria-label="Passengers" className="flex flex-col gap-2">
@@ -22,6 +24,10 @@ export function PassengerList() {
           isActive={passenger.id === state.activePassengerId}
           onSelect={setActivePassenger}
           onRename={renamePassenger}
+          onEditMeal={(passengerId) => {
+            setActivePassenger(passengerId);
+            setView('meals');
+          }}
           onRemoveSeat={(passengerId) => {
             const seatId = passenger.seatId;
             removeSeat(passengerId);

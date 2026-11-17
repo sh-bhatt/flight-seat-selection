@@ -10,17 +10,13 @@ import {
   getGrandTotal,
   getMealsTotal,
   getPriceBreakdown,
+  getSelectedMealOptionId,
   getSeatOwner,
   getSeatsTotal,
   getSeatStatus,
   getUnassignedCount,
 } from '@/state/selectors';
-import type { MealOption } from '@/types';
-
-const MEALS: MealOption[] = [
-  { id: 'veg', name: 'Veg Meal', description: '', price: 300, isVeg: true },
-  { id: 'nonveg', name: 'Chicken', description: '', price: 450, isVeg: false },
-];
+import { MEAL_OPTIONS as MEALS, NO_MEAL_ID } from '@/data/meals';
 
 function run(state: BookingState, ...actions: BookingAction[]): BookingState {
   return actions.reduce(bookingReducer, state);
@@ -149,7 +145,7 @@ describe('SET_PASSENGER_COUNT', () => {
       click(seatA),
       click(seatB),
       click(seatC),
-      { type: 'SELECT_MEAL', passengerId: 'passenger-3', mealId: 'veg' },
+      { type: 'SELECT_MEAL', passengerId: 'passenger-3', mealId: 'paneer-wrap' },
     );
     const shrunk = run(full, { type: 'SET_PASSENGER_COUNT', count: 2 });
     expect(shrunk.passengers).toHaveLength(2);
@@ -183,19 +179,90 @@ describe('RENAME_PASSENGER', () => {
   });
 });
 
+describe('SELECT_MEAL', () => {
+  const pick = (mealId: string | null): BookingAction => ({
+    type: 'SELECT_MEAL',
+    passengerId: 'passenger-1',
+    mealId,
+  });
+
+  it('assigns one meal and replaces it when another is picked', () => {
+    const first = run(base, pick('paneer-wrap'));
+    expect(first.passengers[0].mealId).toBe('paneer-wrap');
+    expect(run(first, pick('jain-meal')).passengers[0].mealId).toBe('jain-meal');
+  });
+
+  it('deselects when the same meal is picked again, or on null / No meal', () => {
+    const picked = run(base, pick('paneer-wrap'));
+    expect(run(picked, pick('paneer-wrap')).passengers[0].mealId).toBeNull();
+    expect(run(picked, pick(null)).passengers[0].mealId).toBeNull();
+    expect(run(picked, pick(NO_MEAL_ID)).passengers[0].mealId).toBeNull();
+  });
+
+  it('ignores unknown meals and passengers (same state object)', () => {
+    expect(bookingReducer(base, pick('pizza'))).toBe(base);
+    expect(
+      bookingReducer(base, {
+        type: 'SELECT_MEAL',
+        passengerId: 'nobody',
+        mealId: 'paneer-wrap',
+      }),
+    ).toBe(base);
+  });
+
+  it('only affects the chosen passenger and leaves the seat alone', () => {
+    const state = run(withPassengers(2), click(seatA), {
+      type: 'SELECT_MEAL',
+      passengerId: 'passenger-2',
+      mealId: 'fruit-yogurt',
+    });
+    expect(state.passengers[0].mealId).toBeNull();
+    expect(state.passengers[1].mealId).toBe('fruit-yogurt');
+    expect(state.passengers[0].seatId).toBe(seatA);
+  });
+
+  it('free meals add nothing; paid meals add to meals subtotal and grand total', () => {
+    const state = run(
+      withPassengers(3),
+      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'veg-sandwich' },
+      { type: 'SELECT_MEAL', passengerId: 'passenger-2', mealId: 'jain-meal' },
+    );
+    expect(getMealsTotal(state)).toBe(250);
+    expect(getGrandTotal(state)).toBe(250);
+    expect(getPriceBreakdown(state)[0].mealItem).toEqual({
+      label: 'Standard Veg Sandwich',
+      amount: 0,
+    });
+    expect(getPriceBreakdown(state)[2].mealItem).toBeNull();
+  });
+
+  it('removing a meal lowers the totals', () => {
+    const state = run(base, pick('chicken-biryani'), pick('chicken-biryani'));
+    expect(getMealsTotal(state)).toBe(0);
+    expect(getGrandTotal(state)).toBe(0);
+  });
+
+  it('getSelectedMealOptionId falls back to No meal', () => {
+    expect(getSelectedMealOptionId(base, 'passenger-1')).toBe(NO_MEAL_ID);
+    expect(
+      getSelectedMealOptionId(run(base, pick('jain-meal')), 'passenger-1'),
+    ).toBe('jain-meal');
+  });
+});
+
 describe('SET_LAYOUT', () => {
   it('regenerates seats, clears assignments and keeps meals', () => {
     const state = run(
       withPassengers(2),
       click(seatA),
       click(seatB),
-      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'veg' },
+      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'paneer-wrap' },
       { type: 'SET_LAYOUT', layoutId: '2-3-2' },
     );
     expect(state.layoutId).toBe('2-3-2');
     expect(state.seats).not.toBe(base.seats);
     expect(state.passengers.every((p) => p.seatId === null)).toBe(true);
-    expect(state.passengers[0].mealId).toBe('veg');
+    expect(state.passengers[0].mealId).toBe('paneer-wrap');
   });
 });
 
@@ -207,16 +274,16 @@ describe('totals and selectors', () => {
       withPassengers(2),
       click(priced[0].id),
       click(free.id),
-      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'veg' },
-      { type: 'SELECT_MEAL', passengerId: 'passenger-2', mealId: 'nonveg' },
+      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'paneer-wrap' },
+      { type: 'SELECT_MEAL', passengerId: 'passenger-2', mealId: 'chicken-biryani' },
     );
     expect(getSeatsTotal(state)).toBe(priced[0].price);
-    expect(getMealsTotal(state, MEALS)).toBe(750);
-    expect(getGrandTotal(state, MEALS)).toBe(priced[0].price + 750);
+    expect(getMealsTotal(state, MEALS)).toBe(700);
+    expect(getGrandTotal(state, MEALS)).toBe(priced[0].price + 700);
     const [first, second] = getPriceBreakdown(state, MEALS);
     expect(first.subtotal).toBe(priced[0].price + 300);
     expect(second.seatItem?.amount).toBe(0);
-    expect(second.subtotal).toBe(450);
+    expect(second.subtotal).toBe(400);
   });
 
   it('derives seat status from passengers', () => {

@@ -65,15 +65,17 @@ export function PriceBreakdown() {
 
   return (
     <div className="flex flex-col gap-4">
-      <ul aria-label="Seats" className="flex flex-col gap-2">
-        {seatLines.map(({ passengerId, passengerName, seat }) => (
-          <PriceRow
-            key={passengerId}
-            label={`${passengerName} · ${seat.id} (${CATEGORY_LABEL[seat.category]})`}
-            amount={seat.price}
-          />
-        ))}
-      </ul>
+      {seatLines.length > 0 && (
+        <ul aria-label="Seats" className="flex flex-col gap-2">
+          {seatLines.map(({ passengerId, passengerName, seat }) => (
+            <PriceRow
+              key={passengerId}
+              label={`${passengerName} · ${seat.id} (${CATEGORY_LABEL[seat.category]})`}
+              amount={seat.price}
+            />
+          ))}
+        </ul>
+      )}
 
       {mealLines.length > 0 && (
         <ul aria-label="Meals" className="flex flex-col gap-2">

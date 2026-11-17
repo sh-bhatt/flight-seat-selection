@@ -1,15 +1,13 @@
 import { AppHeader } from '@/components/layout/AppHeader';
+import { MainArea } from '@/components/layout/MainArea';
 import { PassengerPanel } from '@/components/passengers/PassengerPanel';
-import { LayoutToggle } from '@/components/seat-map/LayoutToggle';
-import { SeatLegend } from '@/components/seat-map/SeatLegend';
-import { SeatMap } from '@/components/seat-map/SeatMap';
 import { MobileSummaryBar } from '@/components/summary/MobileSummaryBar';
 import { SummarySidebar } from '@/components/summary/SummarySidebar';
 import { AppProviders } from '@/context/AppProviders';
 
 /**
  * Grid placement per breakpoint:
- * - lg+: passengers | map | summary (3 columns, summary sticky)
+ * - lg+: passengers | tabs (seats / meals) | summary (3 columns, summary sticky)
  * - md:  passengers + summary stacked on the left, map on the right
  * - <md: single column; summary lives in the sticky bottom bar
  */
@@ -24,17 +22,7 @@ export default function Home() {
             <PassengerPanel />
           </div>
 
-          <section
-            aria-label="Seat map"
-            className="flex min-w-0 flex-col gap-4 md:col-start-2 md:row-span-2 md:row-start-1 lg:row-span-1"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Choose your seats</h2>
-              <LayoutToggle />
-            </div>
-            <SeatLegend />
-            <SeatMap />
-          </section>
+          <MainArea className="md:col-start-2 md:row-span-2 md:row-start-1 lg:row-span-1" />
 
           <SummarySidebar className="md:col-start-1 md:row-start-2 lg:sticky lg:top-4 lg:col-start-3 lg:row-start-1 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto" />
         </div>

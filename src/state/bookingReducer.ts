@@ -1,3 +1,4 @@
+import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { generateSeatMap } from '@/lib/generateSeatMap';
 import { getSeatById, getSeatOwnerMap } from '@/state/selectors';
@@ -217,6 +218,32 @@ function renamePassenger(
   };
 }
 
+/**
+ * One meal per passenger. Picking the meal they already have, `null` or the
+ * "No meal" option clears it. Unknown passengers/meals are ignored.
+ */
+function selectMeal(
+  state: BookingState,
+  passengerId: string,
+  mealId: string | null,
+): BookingState {
+  const passenger = state.passengers.find((p) => p.id === passengerId);
+  if (!passenger || !state.mealsEnabled) return state;
+  if (mealId !== null && !MEAL_OPTIONS.some((meal) => meal.id === mealId)) {
+    return state;
+  }
+  const isClearing =
+    mealId === null || mealId === NO_MEAL_ID || mealId === passenger.mealId;
+  const nextMealId = isClearing ? null : mealId;
+  if (nextMealId === passenger.mealId) return state;
+  return {
+    ...state,
+    passengers: updatePassenger(state.passengers, passengerId, {
+      mealId: nextMealId,
+    }),
+  };
+}
+
 function setLayout(state: BookingState, layoutId: LayoutId): BookingState {
   if (layoutId === state.layoutId) return state;
   return {
@@ -281,12 +308,7 @@ function reduce(state: BookingState, action: BookingAction): BookingState {
         }),
       };
     case 'SELECT_MEAL':
-      return {
-        ...state,
-        passengers: updatePassenger(state.passengers, action.passengerId, {
-          mealId: action.mealId,
-        }),
-      };
+      return selectMeal(state, action.passengerId, action.mealId);
     case 'RESET':
       return createInitialState();
   }

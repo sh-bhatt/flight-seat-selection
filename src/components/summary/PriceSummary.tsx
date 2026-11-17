@@ -6,8 +6,8 @@ import { SeatIcon } from '@/components/ui/Icons';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useBooking } from '@/context/BookingContext';
 import {
-  getAssignedCount,
   getUnassignedCount,
+  hasPricedSelections,
   isBookingComplete,
 } from '@/state/selectors';
 
@@ -21,9 +21,9 @@ function EmptyState() {
       <span className="flex size-12 items-center justify-center rounded-full bg-surface-sunken text-ink-muted">
         <SeatIcon className="size-6" />
       </span>
-      <p className="text-sm font-semibold">No seats selected yet</p>
+      <p className="text-sm font-semibold">Nothing selected yet</p>
       <p className="text-xs text-ink-muted">
-        Pick a seat on the map to see your price.
+        Pick a seat or a meal to see your price.
       </p>
     </div>
   );
@@ -40,7 +40,7 @@ export function PriceSummary({ onContinue }: PriceSummaryProps) {
   return (
     <section aria-label="Price summary" className="flex flex-col gap-4">
       <h2 className="text-base font-semibold">Price summary</h2>
-      {getAssignedCount(state) === 0 ? <EmptyState /> : <PriceBreakdown />}
+      {hasPricedSelections(state) ? <PriceBreakdown /> : <EmptyState />}
 
       <Tooltip content={blockedHint}>
         {(describedBy) => (
