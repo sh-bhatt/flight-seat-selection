@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
+/*
+ * Cabin color system. Everything the seat map paints comes from these tokens:
+ * a night-sky ink + cabin-paper surface, one indigo accent for "mine", and
+ * three category hues (slate / amber / teal) that stay subtle on purpose.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #eef0f5;
+  --foreground: #101a2e;
+  --surface: #ffffff;
+  --surface-sunken: #f4f6fa;
+  --line: #d5dae6;
+  --ink-muted: #5b6579;
+
+  --accent: #3b3fd8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e5fb;
+
+  --seat-standard: #f6f8fc;
+  --seat-standard-line: #a9b3c8;
+  --seat-premium: #fff3d6;
+  --seat-premium-line: #d9a21b;
+  --seat-legroom: #d9f3f1;
+  --seat-legroom-line: #1d9a92;
+  --seat-occupied: #dfe2ea;
+  --seat-occupied-ink: #7b8497;
+  --seat-other: #6b7385;
+  --seat-other-ink: #ffffff;
+  --seat-free: #2e9e5b;
+
+  --exit: #d6402f;
+  --danger: #c7372a;
+  --success: #1f8a4c;
+  --toast-bg: #101a2e;
+  --toast-ink: #f4f6fa;
+
+  --summary-bar-height: 4.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a1020;
+    --foreground: #e8ecf5;
+    --surface: #131c33;
+    --surface-sunken: #0e1629;
+    --line: #2a3553;
+    --ink-muted: #94a0ba;
+
+    --accent: #7c82ff;
+    --accent-ink: #0a1020;
+    --accent-soft: #232a57;
+
+    --seat-standard: #1a2542;
+    --seat-standard-line: #52608a;
+    --seat-premium: #3a2f12;
+    --seat-premium-line: #d9a21b;
+    --seat-legroom: #0f3434;
+    --seat-legroom-line: #2bb5ac;
+    --seat-occupied: #1f2740;
+    --seat-occupied-ink: #6a7692;
+    --seat-other: #5d6785;
+    --seat-other-ink: #f4f6fa;
+    --seat-free: #4cc47f;
+
+    --exit: #ff6b57;
+    --danger: #ff7a6b;
+    --success: #4cc47f;
+    --toast-bg: #e8ecf5;
+    --toast-ink: #101a2e;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-line: var(--line);
+  --color-ink-muted: var(--ink-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-seat-standard: var(--seat-standard);
+  --color-seat-standard-line: var(--seat-standard-line);
+  --color-seat-premium: var(--seat-premium);
+  --color-seat-premium-line: var(--seat-premium-line);
+  --color-seat-legroom: var(--seat-legroom);
+  --color-seat-legroom-line: var(--seat-legroom-line);
+  --color-seat-occupied: var(--seat-occupied);
+  --color-seat-occupied-ink: var(--seat-occupied-ink);
+  --color-seat-other: var(--seat-other);
+  --color-seat-other-ink: var(--seat-other-ink);
+  --color-seat-free: var(--seat-free);
+
+  --color-exit: var(--exit);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-toast: var(--toast-bg);
+  --color-toast-ink: var(--toast-ink);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-toast-in {
+    animation: toast-in 160ms ease-out;
+  }
 }

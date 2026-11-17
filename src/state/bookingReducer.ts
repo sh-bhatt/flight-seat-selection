@@ -1,3 +1,4 @@
+import { formatCurrency } from '@/lib/formatCurrency';
 import { generateSeatMap } from '@/lib/generateSeatMap';
 import { getSeatById, getSeatOwnerMap } from '@/state/selectors';
 import type { LayoutId, Passenger, Seat } from '@/types';
@@ -82,7 +83,7 @@ export function getSeatClickOutcome(
     return {
       type: 'blocked',
       reason: 'no-passenger',
-      message: 'Select a passenger first.',
+      message: 'Select a passenger first',
     };
   }
   const seat = getSeatById(state.seats, seatId);
@@ -90,14 +91,14 @@ export function getSeatClickOutcome(
     return {
       type: 'blocked',
       reason: 'unknown-seat',
-      message: `Seat ${seatId} does not exist.`,
+      message: `Seat ${seatId} does not exist`,
     };
   }
   if (seat.isOccupied) {
     return {
       type: 'blocked',
       reason: 'occupied',
-      message: `Seat ${seatId} is already occupied.`,
+      message: `Seat ${seatId} is already occupied`,
     };
   }
   const ownerId = getSeatOwnerMap(state.passengers).get(seatId);
@@ -106,24 +107,24 @@ export function getSeatClickOutcome(
     return {
       type: 'blocked',
       reason: 'taken-by-other',
-      message: `Seat ${seatId} is already selected by ${owner?.name ?? 'another passenger'}.`,
+      message: `Seat ${seatId} is taken by ${owner?.name ?? 'another passenger'}`,
     };
   }
   if (ownerId === active.id) {
     return {
       type: 'removed',
-      message: `Seat ${seatId} removed from ${active.name}.`,
+      message: `Seat ${seatId} removed from ${active.name}`,
     };
   }
   if (active.seatId !== null) {
     return {
       type: 'changed',
-      message: `${active.name} moved from ${active.seatId} to ${seatId}.`,
+      message: `${active.name} moved from ${active.seatId} to ${seatId} — ${formatCurrency(seat.price)}`,
     };
   }
   return {
     type: 'assigned',
-    message: `Seat ${seatId} assigned to ${active.name}.`,
+    message: `Seat ${seatId} assigned to ${active.name} — ${formatCurrency(seat.price)}`,
   };
 }
 

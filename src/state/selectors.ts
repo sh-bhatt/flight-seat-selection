@@ -134,3 +134,67 @@ export function getPriceBreakdown(
 export function getUnassignedCount(state: BookingState): number {
   return state.passengers.filter((p) => p.seatId === null).length;
 }
+
+export function getAssignedCount(state: BookingState): number {
+  return state.passengers.filter((p) => p.seatId !== null).length;
+}
+
+/** True once every passenger has a seat, i.e. the booking can be confirmed. */
+export function isBookingComplete(state: BookingState): boolean {
+  return state.passengers.length > 0 && getUnassignedCount(state) === 0;
+}
+
+/** How many seated passengers would be dropped by shrinking to `newCount`. */
+export function getSeatedPassengersRemovedBy(
+  state: BookingState,
+  newCount: number,
+): number {
+  return state.passengers
+    .slice(Math.max(0, newCount))
+    .filter((passenger) => passenger.seatId !== null).length;
+}
+
+export function getPassengerMeal(
+  state: BookingState,
+  passengerId: string,
+  meals: readonly MealOption[] = MEAL_OPTIONS,
+): MealOption | undefined {
+  if (!state.mealsEnabled) return undefined;
+  const passenger = state.passengers.find((p) => p.id === passengerId);
+  return passenger ? getMealById(meals, passenger.mealId) : undefined;
+}
+
+export interface SeatSummaryLine {
+  passengerId: string;
+  passengerName: string;
+  seat: Seat;
+}
+
+export interface MealSummaryLine {
+  passengerId: string;
+  passengerName: string;
+  meal: MealOption;
+}
+
+/** One line per seated passenger, in passenger order. */
+export function getSeatSummaryLines(state: BookingState): SeatSummaryLine[] {
+  return state.passengers.flatMap((passenger) => {
+    const seat = getPassengerSeat(state, passenger.id);
+    return seat
+      ? [{ passengerId: passenger.id, passengerName: passenger.name, seat }]
+      : [];
+  });
+}
+
+/** One line per passenger with a meal; empty while meals are disabled. */
+export function getMealSummaryLines(
+  state: BookingState,
+  meals: readonly MealOption[] = MEAL_OPTIONS,
+): MealSummaryLine[] {
+  return state.passengers.flatMap((passenger) => {
+    const meal = getPassengerMeal(state, passenger.id, meals);
+    return meal
+      ? [{ passengerId: passenger.id, passengerName: passenger.name, meal }]
+      : [];
+  });
+}
