@@ -7,6 +7,7 @@ import { NowBadge, SeatBadge } from '@/components/passengers/SeatBadge';
 import { CATEGORY_LABEL } from '@/components/seat-map/seatDisplay';
 import { IconButton } from '@/components/ui/IconButton';
 import { CloseIcon, PencilIcon } from '@/components/ui/Icons';
+import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 import type { Passenger, Seat } from '@/types';
 
 interface PassengerRowProps {
@@ -26,7 +27,9 @@ function getSubline(seat: Seat | undefined, isActive: boolean): string {
 /**
  * One traveller: avatar, name, seat info and a status pill. The whole row is a
  * button that makes them the active passenger. Rename and remove-seat buttons
- * appear on hover or when anything in the row has keyboard focus.
+ * appear on hover or when anything in the row has keyboard focus, and are
+ * always shown on touch screens (no hover there). When one of them closes
+ * itself (seat removed, rename finished by keyboard) focus returns to the row.
  */
 export function PassengerRow({
   passenger,
@@ -37,6 +40,8 @@ export function PassengerRow({
   onRemoveSeat,
 }: PassengerRowProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const { targetRef: rowButtonRef, requestFocus } =
+    useFocusAfterRender<HTMLButtonElement>();
 
   return (
     <li
@@ -53,15 +58,20 @@ export function PassengerRow({
           <PassengerAvatar name={passenger.name} isActive={isActive} />
           <InlineNameEditor
             name={passenger.name}
-            onCommit={(name) => {
+            onCommit={(name, viaKeyboard) => {
+              if (viaKeyboard) requestFocus();
               onRename(passenger.id, name);
               setIsEditing(false);
             }}
-            onCancel={() => setIsEditing(false)}
+            onCancel={() => {
+              requestFocus();
+              setIsEditing(false);
+            }}
           />
         </>
       ) : (
         <button
+          ref={rowButtonRef}
           type="button"
           aria-pressed={isActive}
           onClick={(event) => {
@@ -87,7 +97,7 @@ export function PassengerRow({
       </span>
 
       {!isEditing && (
-        <span className="absolute top-1/2 right-[4.25rem] flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <span className="absolute top-1/2 right-[4.25rem] flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-surface-sunken p-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:static pointer-coarse:translate-y-0 pointer-coarse:bg-transparent pointer-coarse:opacity-100">
           <IconButton
             size="sm"
             label={`Edit name of ${passenger.name}`}
@@ -104,6 +114,7 @@ export function PassengerRow({
               label={`Remove seat ${seat.id} from ${passenger.name}`}
               onClick={(event) => {
                 event.stopPropagation();
+                requestFocus();
                 onRemoveSeat(passenger.id);
               }}
             >

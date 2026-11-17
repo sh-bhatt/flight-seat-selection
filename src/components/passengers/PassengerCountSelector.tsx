@@ -6,6 +6,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { MinusIcon, PlusIcon } from '@/components/ui/Icons';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
+import { formatCount } from '@/lib/formatCount';
 import { MAX_PASSENGERS, MIN_PASSENGERS } from '@/state/bookingReducer';
 import { getSeatedPassengersRemovedBy } from '@/state/selectors';
 
@@ -28,10 +29,7 @@ export function PassengerCountSelector() {
   function confirmShrink() {
     if (pendingCount !== null) {
       setPassengerCount(pendingCount);
-      showToast(
-        `Removed ${seatsLost} seated ${seatsLost === 1 ? 'passenger' : 'passengers'}`,
-        'info',
-      );
+      showToast(`Removed ${formatCount(seatsLost, 'seated passenger')}`, 'info');
     }
     setPendingCount(null);
   }
@@ -40,7 +38,7 @@ export function PassengerCountSelector() {
     <>
       <div
         role="group"
-        aria-label="Passengers"
+        aria-label="Number of passengers"
         className="flex items-center rounded-full bg-surface-sunken p-0.5"
       >
         <IconButton
@@ -75,8 +73,7 @@ export function PassengerCountSelector() {
         onConfirm={confirmShrink}
         onCancel={() => setPendingCount(null)}
       >
-        This will remove {seatsLost} seated{' '}
-        {seatsLost === 1 ? 'passenger' : 'passengers'} and free{' '}
+        This will remove {formatCount(seatsLost, 'seated passenger')} and free{' '}
         {seatsLost === 1 ? 'their seat' : 'their seats'}.
       </ConfirmDialog>
     </>

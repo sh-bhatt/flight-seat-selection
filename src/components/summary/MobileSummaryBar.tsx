@@ -6,17 +6,17 @@ import { PriceSummary } from '@/components/summary/PriceSummary';
 import { useContinueStep } from '@/components/summary/useContinueStep';
 import { AnimatedAmount } from '@/components/ui/AnimatedAmount';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
-import { ArrowLeftIcon } from '@/components/ui/Icons';
 import { Modal } from '@/components/ui/Modal';
 import { useBooking } from '@/context/BookingContext';
-import { useMainView } from '@/context/ViewContext';
 import { getGrandTotal } from '@/state/selectors';
 
-/** Phones: fixed bottom bar with the total, Details (opens the summary sheet) and Continue. */
+/**
+ * Phones: fixed bottom bar with the total, Details (opens the summary sheet)
+ * and Continue. Going back to Seats is left to the step switch and the
+ * "Back to seats" link above the meals, so the total keeps its room at 320px.
+ */
 export function MobileSummaryBar() {
   const state = useBooking();
-  const { view, setView } = useMainView();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const step = useContinueStep();
 
@@ -24,18 +24,8 @@ export function MobileSummaryBar() {
     <>
       <section
         aria-label="Booking total"
-        className="fixed inset-x-0 bottom-0 z-40 flex h-[var(--summary-bar-height)] items-center gap-2 border-t border-line bg-surface px-4 shadow-[0_-8px_24px_-12px_rgba(10,37,64,0.2)] md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex h-[var(--summary-bar-height)] items-center gap-2 pb-[env(safe-area-inset-bottom)] border-t border-line bg-surface px-4 shadow-[0_-8px_24px_-12px_rgba(10,37,64,0.2)] md:hidden"
       >
-        {view === 'meals' && (
-          <IconButton
-            size="xl"
-            label="Back to seats"
-            className="border border-line"
-            onClick={() => setView('seats')}
-          >
-            <ArrowLeftIcon className="size-5" />
-          </IconButton>
-        )}
         <div className="min-w-0 flex-1">
           <p className="text-xs leading-none text-ink-muted">Total</p>
           <p className="mt-1 text-xl leading-none font-extrabold tracking-tight tabular-nums">

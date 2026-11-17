@@ -42,7 +42,8 @@
   --cockpit: #c4cfdd;
   --wing: #e3e8ef;
 
-  --summary-bar-height: 5.5rem;
+  /* Bar content (5.5rem) plus the device safe area (iPhone home indicator). */
+  --summary-bar-height: calc(5.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @theme inline {

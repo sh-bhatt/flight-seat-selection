@@ -4,11 +4,16 @@ import {
   getSeatCategory,
   isSeatOccupied,
 } from '@/data/seatPricing';
-import type { LayoutConfig, LayoutId, Seat, SeatPosition } from '@/types';
+import type { ColumnGroups, LayoutConfig, LayoutId, Seat, SeatPosition } from '@/types';
+
+/** The one place that defines a seat id: row number + column letter, e.g. "12C". */
+export function toSeatId(row: number, column: string): string {
+  return `${row}${column}`;
+}
 
 /** Window = outermost seat of the cabin; aisle = next to a gap; otherwise middle. */
 function getSeatPosition(
-  columnGroups: string[][],
+  columnGroups: ColumnGroups,
   groupIndex: number,
   indexInGroup: number,
 ): SeatPosition {
@@ -30,13 +35,13 @@ function buildSeats(layout: LayoutConfig): Seat[] {
   for (let row = 1; row <= layout.rows; row += 1) {
     layout.columnGroups.forEach((group, groupIndex) => {
       group.forEach((column, indexInGroup) => {
-        const id = `${row}${column}`;
+        const id = toSeatId(row, column);
         const position = getSeatPosition(
           layout.columnGroups,
           groupIndex,
           indexInGroup,
         );
-        const category = getSeatCategory(layout.id, id, row, position);
+        const category = getSeatCategory(layout, id, row, position);
         seats.push({
           id,
           row,

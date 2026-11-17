@@ -1,9 +1,10 @@
 import { Fragment, type ReactNode } from 'react';
+import type { ColumnGroups } from '@/types';
 
 interface CabinRowProps {
   /** Row number, printed in the aisle(s); empty for the header row. */
   label: string;
-  columnGroups: string[][];
+  columnGroups: ColumnGroups;
   renderCell: (column: string) => ReactNode;
   /** Header rows are visual only and hidden from assistive tech. */
   decorative?: boolean;

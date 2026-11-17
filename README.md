@@ -60,7 +60,7 @@ src/
   context/      BookingContext (state + dispatch), ViewContext (open step)
   state/        bookingReducer (all rules) and selectors (derived data)
   data/         Layouts, pricing, meals, flight, mock API
-  lib/          Seat map generator, currency and initials helpers
+  lib/          Seat map generator (and seat id format), currency, count, name and initials helpers
   hooks/        useSeatMap and small UI hooks
   types/        Shared domain types
 ```
@@ -78,7 +78,6 @@ src/
   seatMapStatus: 'loading' | 'ready' | 'error';
   passengers: { id, name, seatId: string | null, mealId: string | null }[];
   activePassengerId: string | null;
-  mealsEnabled: boolean;
 }
 ```
 
@@ -95,9 +94,9 @@ Which step is open (Seats or Meals) and the review dialog are UI-only and live i
 | `SEATS_LOADED` / `SEATS_FAILED` | Result of the seat map request (ignored if stale) |
 | `RETRY_SEATS` | Try the request again after a failure |
 | `SEAT_CLICKED` | Apply the seat assignment rules |
-| `REMOVE_SEAT` | Release a passenger's seat |
+| `REMOVE_SEAT` | Release a passenger's seat (no-op if they have none) |
 | `SELECT_MEAL` | Set, replace or clear a passenger's meal |
-| `RESET` | Back to one passenger on the default layout |
+| `RESET` | Back to one passenger on the default layout ("Start over" confirms first whenever passengers, names, seats or meals would be lost) |
 
 **Derived data via selectors.** Seat status (available / occupied / selected by me / selected by someone else), the owner of a seat, per-passenger lines, seat and meal subtotals and the grand total are all computed by pure functions in `src/state/selectors.ts`. None of them is stored. Because totals are recomputed from `passengers` and `seats` on every render, they cannot drift out of sync with the data, and there is no "update the total" step to forget.
 
@@ -126,9 +125,10 @@ Every seat click is evaluated by one pure function, `getSeatClickOutcome`. The r
 |---|---|---|
 | Standard | Free | Default |
 | Premium | ₹250 | Rows 2–5, window and aisle seats |
-| Extra legroom | ₹350 | Row 1 and exit row 10 |
+| Extra legroom | ₹350 | Row 1 and the layout's exit rows (row 10) |
 
 - Middle seats in rows 2–5 are Standard.
+- Exit rows are configured once per layout (`exitRows` in `src/data/layouts.ts`) and drive both the EXIT markers and the extra-legroom price.
 - The 3-2 layout has explicit overrides to match the supplied design: 1A, 1B, 1D, 2B Standard; 1C and 2A Extra legroom; 1E Premium. Overrides win over the row rules and those seats are never occupied.
 - About 20% of the remaining seats are occupied, chosen by a seeded hash so server and client render the same map.
 - Grand total = sum of seat prices + sum of meal prices.

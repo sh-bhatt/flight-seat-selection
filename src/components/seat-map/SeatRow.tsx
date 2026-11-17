@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 import { CabinRow } from '@/components/seat-map/CabinRow';
-import type { Seat } from '@/types';
+import type { ColumnGroups, Seat } from '@/types';
 
 interface SeatRowProps {
   rowNumber: number;
-  columnGroups: string[][];
+  columnGroups: ColumnGroups;
   seatsByColumn: ReadonlyMap<string, Seat>;
   renderSeat: (seat: Seat) => ReactNode;
 }

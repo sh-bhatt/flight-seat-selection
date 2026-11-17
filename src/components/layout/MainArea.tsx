@@ -9,7 +9,7 @@ import { SeatMap } from '@/components/seat-map/SeatMap';
 import { useBooking } from '@/context/BookingContext';
 import { useMainView } from '@/context/ViewContext';
 import { useSeatMap } from '@/hooks/useSeatMap';
-import { getActivePassenger } from '@/state/selectors';
+import { getActivePassenger, isBookingComplete } from '@/state/selectors';
 
 function PageTitle({
   title,
@@ -46,7 +46,9 @@ export function MainArea({ className = '' }: { className?: string }) {
         <>
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <PageTitle title="Select your seats">
-              Choosing a seat for {activeLabel}
+              {isBookingComplete(state)
+                ? 'All travellers seated · click a traveller to change their seat'
+                : <>Choosing a seat for {activeLabel}</>}
             </PageTitle>
             <LayoutToggle />
           </div>

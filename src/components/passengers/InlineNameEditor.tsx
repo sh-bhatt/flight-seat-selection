@@ -5,7 +5,12 @@ import { MAX_NAME_LENGTH } from '@/state/bookingReducer';
 
 interface InlineNameEditorProps {
   name: string;
-  onCommit: (name: string) => void;
+  /**
+   * `viaKeyboard` is true for Enter, false when the input lost focus (the
+   * user already moved focus elsewhere, so it must not be pulled back).
+   */
+  onCommit: (name: string, viaKeyboard: boolean) => void;
+  /** Esc: always a keyboard action. */
   onCancel: () => void;
 }
 
@@ -32,16 +37,16 @@ export function InlineNameEditor({
   const [length, setLength] = useState(name.length);
   const hint = getHint(length);
 
-  function finish(commit: boolean, value: string) {
+  function finish(run: () => void) {
     if (isFinished.current) return;
     isFinished.current = true;
-    if (commit) onCommit(value);
-    else onCancel();
+    run();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Enter') finish(true, event.currentTarget.value);
-    if (event.key === 'Escape') finish(false, name);
+    const { value } = event.currentTarget;
+    if (event.key === 'Enter') finish(() => onCommit(value, true));
+    if (event.key === 'Escape') finish(onCancel);
   }
 
   return (
@@ -55,7 +60,10 @@ export function InlineNameEditor({
         onChange={(event) => setLength(event.currentTarget.value.length)}
         onFocus={(event) => event.currentTarget.select()}
         onKeyDown={handleKeyDown}
-        onBlur={(event) => finish(true, event.currentTarget.value)}
+        onBlur={(event) => {
+          const { value } = event.currentTarget;
+          finish(() => onCommit(value, false));
+        }}
         onClick={(event) => event.stopPropagation()}
         className="h-8 min-w-0 rounded-md border-2 border-navy bg-surface px-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-navy/20"
       />

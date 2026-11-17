@@ -1,33 +1,21 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { CATEGORY_LABEL } from '@/components/seat-map/seatDisplay';
 import { AnimatedAmount } from '@/components/ui/AnimatedAmount';
 import { useBooking } from '@/context/BookingContext';
 import { formatCurrency } from '@/lib/formatCurrency';
 import {
   getGrandTotal,
   getMealsTotal,
-  getMealSummaryLines,
+  getPriceBreakdown,
   getSeatsTotal,
-  getSeatSummaryLines,
+  type PriceLineItem,
 } from '@/state/selectors';
 
-function PriceRow({
-  label,
-  amount,
-  forceZero = false,
-}: {
-  label: ReactNode;
-  amount: number;
-  forceZero?: boolean;
-}) {
+function LineItem({ item }: { item: PriceLineItem }) {
   return (
-    <li className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
-      <span className="shrink-0 font-medium tabular-nums">
-        {formatCurrency(amount, { forceZero })}
-      </span>
+    <li className="flex items-baseline justify-between gap-3 text-sm text-ink-secondary">
+      <span className="min-w-0 [overflow-wrap:anywhere]">{item.label}</span>
+      <span className="shrink-0 tabular-nums">{formatCurrency(item.amount)}</span>
     </li>
   );
 }
@@ -56,39 +44,32 @@ function TotalRow({
 }
 
 /**
- * Seat and meal line items plus totals. Everything is derived from selectors
- * on every render, so the numbers can never go stale.
+ * Per passenger: seat and meal line items with their subtotal, then the seat,
+ * meal and grand totals. Everything comes from selectors on every render, so
+ * the numbers can never go stale.
  */
 export function PriceBreakdown() {
   const state = useBooking();
-  const seatLines = getSeatSummaryLines(state);
-  const mealLines = getMealSummaryLines(state);
+  const breakdown = getPriceBreakdown(state);
 
   return (
     <div className="flex flex-col gap-4">
-      {seatLines.length > 0 && (
-        <ul aria-label="Seats" className="flex flex-col gap-2">
-          {seatLines.map(({ passengerId, passengerName, seat }) => (
-            <PriceRow
-              key={passengerId}
-              label={`${passengerName} · ${seat.id} (${CATEGORY_LABEL[seat.category]})`}
-              amount={seat.price}
-            />
-          ))}
-        </ul>
-      )}
-
-      {mealLines.length > 0 && (
-        <ul aria-label="Meals" className="flex flex-col gap-2">
-          {mealLines.map(({ passengerId, passengerName, meal }) => (
-            <PriceRow
-              key={passengerId}
-              label={`${passengerName} · ${meal.name}`}
-              amount={meal.price}
-            />
-          ))}
-        </ul>
-      )}
+      <ul aria-label="Passengers" className="flex flex-col gap-3">
+        {breakdown.map(({ passengerId, passengerName, seatItem, mealItem, subtotal }) => (
+          <li key={passengerId} className="flex flex-col gap-1">
+            <p className="flex items-baseline justify-between gap-3 text-sm font-semibold">
+              <span className="min-w-0 [overflow-wrap:anywhere]">{passengerName}</span>
+              <span className="shrink-0 tabular-nums">
+                {formatCurrency(subtotal, { forceZero: true })}
+              </span>
+            </p>
+            <ul className="flex flex-col gap-1 pl-3">
+              {seatItem && <LineItem item={seatItem} />}
+              {mealItem && <LineItem item={mealItem} />}
+            </ul>
+          </li>
+        ))}
+      </ul>
 
       <dl className="flex flex-col gap-2">
         <TotalRow label="Seats subtotal" amount={getSeatsTotal(state)} />

@@ -1,3 +1,4 @@
+import { toSeatId } from '@/lib/generateSeatMap';
 import type { LayoutConfig } from '@/types';
 
 export type NavigationKey =
@@ -27,7 +28,7 @@ export function isNavigationKey(key: string): key is NavigationKey {
 export function buildSeatGrid(layout: LayoutConfig): SeatGrid {
   const columns = layout.columnGroups.flat();
   return Array.from({ length: layout.rows }, (_, i) =>
-    columns.map((column) => `${i + 1}${column}`),
+    columns.map((column) => toSeatId(i + 1, column)),
   );
 }
 

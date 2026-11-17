@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
 import { LAYOUT_IDS, LAYOUTS } from '@/data/layouts';
+import { formatCount } from '@/lib/formatCount';
 import { getAssignedCount } from '@/state/selectors';
 import type { LayoutId } from '@/types';
 
@@ -20,13 +21,11 @@ export function LayoutToggle() {
   const [pendingLayout, setPendingLayout] = useState<LayoutId | null>(null);
 
   const assignedCount = getAssignedCount(state);
+  const selections = formatCount(assignedCount, 'seat selection');
 
   function applyLayout(layoutId: LayoutId) {
     setLayout(layoutId);
-    const cleared =
-      assignedCount > 0
-        ? ` · ${assignedCount} seat ${assignedCount === 1 ? 'selection' : 'selections'} cleared`
-        : '';
+    const cleared = assignedCount > 0 ? ` · ${selections} cleared` : '';
     showToast(
       `Switched to ${formatLayoutLabel(layoutId)} layout${cleared}`,
       'info',
@@ -79,8 +78,7 @@ export function LayoutToggle() {
         onConfirm={confirmSwitch}
         onCancel={() => setPendingLayout(null)}
       >
-        Switching layout will clear {assignedCount} seat{' '}
-        {assignedCount === 1 ? 'selection' : 'selections'}.
+        Switching layout will clear {selections}.
       </ConfirmDialog>
     </>
   );

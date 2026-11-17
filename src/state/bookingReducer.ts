@@ -1,6 +1,7 @@
 import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { generateSeatMap } from '@/lib/generateSeatMap';
+import { defaultPassengerName } from '@/lib/passengerName';
 import { getSeatById, getSeatOwnerMap } from '@/state/selectors';
 import type { LayoutId, Passenger, Seat, SeatMapStatus } from '@/types';
 
@@ -15,7 +16,6 @@ export interface BookingState {
   seatMapStatus: SeatMapStatus;
   passengers: Passenger[];
   activePassengerId: string | null;
-  mealsEnabled: boolean;
 }
 
 export type BookingAction =
@@ -47,8 +47,9 @@ export interface SeatClickOutcome {
 
 const DEFAULT_LAYOUT: LayoutId = '3-2';
 
-function defaultPassengerName(index: number): string {
-  return `Passenger ${index + 1}`;
+/** Shared by seat clicks and the passenger row's remove button. */
+export function getSeatRemovedMessage(seatId: string, passengerName: string): string {
+  return `Seat ${seatId} removed from ${passengerName}`;
 }
 
 // Passengers are only added/removed at the end, so index-based ids stay unique.
@@ -72,7 +73,6 @@ function createBaseState(
     layoutId,
     passengers,
     activePassengerId: passengers[0]?.id ?? null,
-    mealsEnabled: true,
   };
 }
 
@@ -150,7 +150,7 @@ export function getSeatClickOutcome(
   if (ownerId === active.id) {
     return {
       type: 'removed',
-      message: `Seat ${seatId} removed from ${active.name}`,
+      message: getSeatRemovedMessage(seatId, active.name),
     };
   }
   if (active.seatId !== null) {
@@ -295,7 +295,7 @@ function selectMeal(
   mealId: string | null,
 ): BookingState {
   const passenger = state.passengers.find((p) => p.id === passengerId);
-  if (!passenger || !state.mealsEnabled) return state;
+  if (!passenger) return state;
   if (mealId !== null && !MEAL_OPTIONS.some((meal) => meal.id === mealId)) {
     return state;
   }
@@ -352,6 +352,16 @@ function seatsFailed(state: BookingState, layoutId: LayoutId): BookingState {
 function retrySeats(state: BookingState): BookingState {
   if (state.seatMapStatus !== 'error') return state;
   return { ...state, seatMapStatus: 'loading' };
+}
+
+/** Frees a passenger's seat; a passenger without one (or unknown) is a no-op. */
+function removeSeat(state: BookingState, passengerId: string): BookingState {
+  const passenger = state.passengers.find((p) => p.id === passengerId);
+  if (!passenger || passenger.seatId === null) return state;
+  return {
+    ...state,
+    passengers: updatePassenger(state.passengers, passengerId, { seatId: null }),
+  };
 }
 
 /** Back to the start. A seat map that is already loaded for the default layout is kept. */
@@ -416,12 +426,7 @@ function reduce(state: BookingState, action: BookingAction): BookingState {
     case 'SEAT_CLICKED':
       return applySeatClick(state, action.seatId);
     case 'REMOVE_SEAT':
-      return {
-        ...state,
-        passengers: updatePassenger(state.passengers, action.passengerId, {
-          seatId: null,
-        }),
-      };
+      return removeSeat(state, action.passengerId);
     case 'SELECT_MEAL':
       return selectMeal(state, action.passengerId, action.mealId);
     case 'RESET':

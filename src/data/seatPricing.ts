@@ -1,4 +1,4 @@
-import type { LayoutId, SeatCategory, SeatPosition } from '@/types';
+import type { LayoutConfig, LayoutId, SeatCategory, SeatPosition } from '@/types';
 
 export const CATEGORY_PRICE: Record<SeatCategory, number> = {
   standard: 0,
@@ -6,7 +6,8 @@ export const CATEGORY_PRICE: Record<SeatCategory, number> = {
   'extra-legroom': 350,
 };
 
-export const EXTRA_LEGROOM_ROWS: readonly number[] = [1, 10];
+/** The bulkhead row; together with the layout's exit rows it gets extra legroom. */
+export const BULKHEAD_ROW = 1;
 export const PREMIUM_ROW_RANGE = { from: 2, to: 5 } as const;
 
 /** Share of seats marked occupied (approximate, hash-driven). */
@@ -31,14 +32,16 @@ export const CATEGORY_OVERRIDES: Partial<
 };
 
 export function getSeatCategory(
-  layoutId: LayoutId,
+  layout: LayoutConfig,
   seatId: string,
   row: number,
   position: SeatPosition,
 ): SeatCategory {
-  const override = CATEGORY_OVERRIDES[layoutId]?.[seatId];
+  const override = CATEGORY_OVERRIDES[layout.id]?.[seatId];
   if (override) return override;
-  if (EXTRA_LEGROOM_ROWS.includes(row)) return 'extra-legroom';
+  if (row === BULKHEAD_ROW || layout.exitRows.includes(row)) {
+    return 'extra-legroom';
+  }
   const inPremiumRows =
     row >= PREMIUM_ROW_RANGE.from && row <= PREMIUM_ROW_RANGE.to;
   if (inPremiumRows && position !== 'middle') return 'premium';

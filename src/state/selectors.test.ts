@@ -7,6 +7,7 @@ import {
 } from '@/state/bookingReducer';
 import {
   getActivePassenger,
+  hasBookingProgress,
   getAdjacentCompanion,
   getFirstUnseatedPassenger,
   getPassengerSeatLines,
@@ -124,5 +125,28 @@ describe('getAdjacentCompanion', () => {
     expect(
       getAdjacentCompanion(threePassengers, seatOf(threePassengers, `${row}B`)),
     ).toBeUndefined();
+  });
+});
+
+describe('hasBookingProgress', () => {
+  const fresh = createInitialState();
+
+  it('is false for an untouched booking', () => {
+    expect(hasBookingProgress(fresh)).toBe(false);
+  });
+
+  it('is true for an extra passenger, a rename, a seat or a meal', () => {
+    expect(hasBookingProgress(threePassengers)).toBe(true);
+    expect(
+      hasBookingProgress(
+        run(fresh, { type: 'RENAME_PASSENGER', passengerId: 'passenger-1', name: 'Asha' }),
+      ),
+    ).toBe(true);
+    expect(hasBookingProgress(run(fresh, click(`${row}A`)))).toBe(true);
+    expect(
+      hasBookingProgress(
+        run(fresh, { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'jain-meal' }),
+      ),
+    ).toBe(true);
   });
 });

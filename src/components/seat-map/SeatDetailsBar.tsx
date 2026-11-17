@@ -11,12 +11,18 @@ interface SeatDetailsBarProps {
   ownerName?: string;
 }
 
-/** Mobile bottom bar for the last tapped seat (there is no hover on touch). */
+/**
+ * Mobile card for the last tapped seat (there is no hover on touch). It is
+ * `sticky` inside the seat map, not `fixed`: it rides just above the bottom
+ * summary bar while the cabin is on screen, takes up its own room at the end
+ * (so it never covers the last rows) and scrolls away with the map.
+ * Hidden from assistive tech: the seat's toast already announces the change.
+ */
 export function SeatDetailsBar({ seat, status, ownerName }: SeatDetailsBarProps) {
   return (
     <div
       aria-hidden="true"
-      className="fixed inset-x-0 bottom-[var(--summary-bar-height)] z-40 border-t border-line bg-surface px-5 py-3 shadow-[0_-8px_24px_-12px_rgba(10,37,64,0.2)] md:hidden"
+      className="sticky bottom-[calc(var(--summary-bar-height)+0.5rem)] z-30 mt-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-[0_-8px_24px_-12px_rgba(10,37,64,0.2)] md:hidden"
     >
       <div className="flex flex-col gap-0.5 text-left">
         <div className="flex items-baseline justify-between gap-3">

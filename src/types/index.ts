@@ -26,12 +26,16 @@ export interface Seat {
   position: SeatPosition;
 }
 
+/** Seat letters grouped by block; aisles sit between groups. */
+export type ColumnGroups = readonly (readonly string[])[];
+
 export interface LayoutConfig {
   id: LayoutId;
   label: string;
-  /** Seat letters grouped by block; aisles sit between groups. */
-  columnGroups: string[][];
+  columnGroups: ColumnGroups;
   rows: number;
+  /** Rows beside an emergency exit: drawn with an EXIT marker and priced as extra legroom. */
+  exitRows: readonly number[];
 }
 
 export interface Passenger {

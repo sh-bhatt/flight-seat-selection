@@ -9,6 +9,7 @@ export const LAYOUTS: Record<LayoutId, LayoutConfig> = {
       ['D', 'E'],
     ],
     rows: 20,
+    exitRows: [10],
   },
   '2-3-2': {
     id: '2-3-2',
@@ -19,6 +20,7 @@ export const LAYOUTS: Record<LayoutId, LayoutConfig> = {
       ['F', 'G'],
     ],
     rows: 20,
+    exitRows: [10],
   },
 };
 

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { CabinRows, CabinShell } from '@/components/seat-map/CabinShell';
 import { Seat } from '@/components/seat-map/Seat';
-import { SeatDetailsBar } from '@/components/seat-map/SeatDetails';
+import { SeatDetailsBar } from '@/components/seat-map/SeatDetailsBar';
 import { SeatMapError } from '@/components/seat-map/SeatMapError';
 import { SeatMapSkeleton } from '@/components/seat-map/SeatMapSkeleton';
 import { SeatRow } from '@/components/seat-map/SeatRow';

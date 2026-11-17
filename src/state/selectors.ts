@@ -1,5 +1,7 @@
 import { LAYOUTS } from '@/data/layouts';
 import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
+import { toSeatId } from '@/lib/generateSeatMap';
+import { defaultPassengerName } from '@/lib/passengerName';
 import type { BookingState } from '@/state/bookingReducer';
 import type { MealOption, Passenger, Seat, SeatStatus } from '@/types';
 
@@ -94,7 +96,6 @@ export function getMealsTotal(
   state: BookingState,
   meals: readonly MealOption[] = MEAL_OPTIONS,
 ): number {
-  if (!state.mealsEnabled) return 0;
   return state.passengers.reduce(
     (sum, passenger) =>
       sum + (getMealById(meals, passenger.mealId)?.price ?? 0),
@@ -109,15 +110,14 @@ export function getGrandTotal(
   return getSeatsTotal(state) + getMealsTotal(state, meals);
 }
 
+/** Per passenger: seat and meal line items and their subtotal (review dialog). */
 export function getPriceBreakdown(
   state: BookingState,
   meals: readonly MealOption[] = MEAL_OPTIONS,
 ): PassengerPriceBreakdown[] {
   return state.passengers.map((passenger) => {
     const seat = getPassengerSeat(state, passenger.id);
-    const meal = state.mealsEnabled
-      ? getMealById(meals, passenger.mealId)
-      : undefined;
+    const meal = getMealById(meals, passenger.mealId);
     const seatItem = seat
       ? { label: `Seat ${seat.id}`, amount: seat.price }
       : null;
@@ -140,9 +140,29 @@ export function getAssignedCount(state: BookingState): number {
   return state.passengers.filter((p) => p.seatId !== null).length;
 }
 
+export function getMealCount(state: BookingState): number {
+  return state.passengers.filter((p) => p.mealId !== null).length;
+}
+
 /** True once every passenger has a seat, i.e. the booking can be confirmed. */
 export function isBookingComplete(state: BookingState): boolean {
   return state.passengers.length > 0 && getUnassignedCount(state) === 0;
+}
+
+/**
+ * True when "Start over" would throw away something the user did: an extra
+ * passenger, a renamed passenger, a seat or a meal. Decides whether to confirm.
+ */
+export function hasBookingProgress(state: BookingState): boolean {
+  return (
+    state.passengers.length > 1 ||
+    state.passengers.some(
+      (p, index) =>
+        p.seatId !== null ||
+        p.mealId !== null ||
+        p.name !== defaultPassengerName(index),
+    )
+  );
 }
 
 /** How many seated passengers would be dropped by shrinking to `newCount`. */
@@ -160,15 +180,8 @@ export function getPassengerMeal(
   passengerId: string,
   meals: readonly MealOption[] = MEAL_OPTIONS,
 ): MealOption | undefined {
-  if (!state.mealsEnabled) return undefined;
   const passenger = state.passengers.find((p) => p.id === passengerId);
   return passenger ? getMealById(meals, passenger.mealId) : undefined;
-}
-
-export interface SeatSummaryLine {
-  passengerId: string;
-  passengerName: string;
-  seat: Seat;
 }
 
 export interface MealSummaryLine {
@@ -177,17 +190,7 @@ export interface MealSummaryLine {
   meal: MealOption;
 }
 
-/** One line per seated passenger, in passenger order. */
-export function getSeatSummaryLines(state: BookingState): SeatSummaryLine[] {
-  return state.passengers.flatMap((passenger) => {
-    const seat = getPassengerSeat(state, passenger.id);
-    return seat
-      ? [{ passengerId: passenger.id, passengerName: passenger.name, seat }]
-      : [];
-  });
-}
-
-/** One line per passenger with a meal; empty while meals are disabled. */
+/** One line per passenger with a meal, in passenger order. */
 export function getMealSummaryLines(
   state: BookingState,
   meals: readonly MealOption[] = MEAL_OPTIONS,
@@ -207,11 +210,6 @@ export function getSelectedMealOptionId(
 ): string {
   const passenger = state.passengers.find((p) => p.id === passengerId);
   return passenger?.mealId ?? NO_MEAL_ID;
-}
-
-/** True when there is anything to price: a seat or a meal. */
-export function hasPricedSelections(state: BookingState): boolean {
-  return getAssignedCount(state) > 0 || getMealSummaryLines(state).length > 0;
 }
 
 export function getActivePassenger(state: BookingState): Passenger | undefined {
@@ -258,7 +256,7 @@ export function getAdjacentCompanion(
   const subject = getSeatOwner(state, seat.id) ?? getActivePassenger(state);
   for (const column of [group[index - 1], group[index + 1]]) {
     if (column === undefined) continue;
-    const neighbour = getSeatOwner(state, `${seat.row}${column}`);
+    const neighbour = getSeatOwner(state, toSeatId(seat.row, column));
     if (neighbour && neighbour.id !== subject?.id) return neighbour;
   }
   return undefined;

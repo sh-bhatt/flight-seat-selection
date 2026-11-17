@@ -51,8 +51,21 @@ function useBookingDispatch(): Dispatch<BookingAction> {
   return dispatch;
 }
 
+export interface BookingActions {
+  setPassengerCount: (count: number) => void;
+  setActivePassenger: (passengerId: string) => void;
+  renamePassenger: (passengerId: string, name: string) => void;
+  setLayout: (layoutId: LayoutId) => void;
+  seatsLoaded: (layoutId: LayoutId, seats: Seat[]) => void;
+  seatsFailed: (layoutId: LayoutId) => void;
+  retrySeats: () => void;
+  removeSeat: (passengerId: string) => void;
+  selectMeal: (passengerId: string, mealId: string | null) => void;
+  reset: () => void;
+}
+
 /** Stable action creators (identity never changes, safe in effect/memo deps). */
-export function useBookingActions() {
+export function useBookingActions(): BookingActions {
   const dispatch = useBookingDispatch();
   return useMemo(
     () => ({

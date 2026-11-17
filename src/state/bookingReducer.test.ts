@@ -513,3 +513,10 @@ describe('resolvePassengerName', () => {
     expect(notice).toContain('30');
   });
 });
+
+describe('REMOVE_SEAT', () => {
+  it('is a no-op (same state object) for an unseated or unknown passenger', () => {
+    expect(bookingReducer(base, { type: 'REMOVE_SEAT', passengerId: 'passenger-1' })).toBe(base);
+    expect(bookingReducer(base, { type: 'REMOVE_SEAT', passengerId: 'nobody' })).toBe(base);
+  });
+});

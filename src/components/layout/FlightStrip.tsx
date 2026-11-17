@@ -5,6 +5,7 @@ import { MobileStepSwitch } from '@/components/layout/MobileStepSwitch';
 import { PlaneIcon } from '@/components/ui/Icons';
 import { useBooking } from '@/context/BookingContext';
 import { FLIGHT } from '@/data/flight';
+import { formatCount } from '@/lib/formatCount';
 
 function Airport({
   code,
@@ -29,7 +30,6 @@ function Airport({
 /** Route, flight facts and the step indicator; collapses to one line on phones. */
 export function FlightStrip() {
   const { passengers } = useBooking();
-  const adults = passengers.length;
 
   return (
     <div className="border-b border-line bg-surface">
@@ -57,7 +57,7 @@ export function FlightStrip() {
           />
           <span aria-hidden="true" className="mx-2 h-9 w-px bg-line" />
           <p className="text-[13px] text-ink-muted">
-            {FLIGHT.date} · {FLIGHT.number} · {adults} {adults === 1 ? 'adult' : 'adults'}
+            {FLIGHT.date} · {FLIGHT.number} · {formatCount(passengers.length, 'adult')}
           </p>
         </div>
         <BookingSteps />

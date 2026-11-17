@@ -27,26 +27,28 @@ vitest.config.mts             Test config (`@` alias, node env)
 src/
   types/index.ts              All shared domain types
   data/
-    layouts.ts                Layout definitions (3-2, 2-3-2)
-    cabin.ts                  EXIT_ROWS (rows beside an emergency exit)
+    layouts.ts                Layout definitions (3-2, 2-3-2): column groups, row count and exit rows per layout
     flight.ts                 Mock flight: brand "aeroline", DEL → BOM, 06:10 → 08:25, 2h 15m, Non-stop, NA 2134, Fri, 21 Nov
-    seatPricing.ts            Category prices, pricing rules, overrides, deterministic occupancy
+    seatPricing.ts            Category prices, pricing rules (bulkhead + the layout's exit rows = extra legroom), overrides, deterministic occupancy (+ test)
     meals.ts                  MEAL_OPTIONS (6 items, free + paid, veg / non-veg) and NO_MEAL_ID
     mockApi.ts                fetchSeatMap(layoutId): 600 ms fake request; rejects when the URL has ?simulateError=1 (+ test)
   lib/
-    generateSeatMap.ts        Builds Seat[] from a layout
+    generateSeatMap.ts        Builds Seat[] from a layout; toSeatId(row, column) is the one place that defines a seat id
     formatCurrency.ts         INR formatting ("₹1,250", "Free")
+    formatCount.ts            "1 seat" / "2 seats" pluralisation shared by every message (+ test)
+    passengerName.ts          defaultPassengerName(index) -> "Passenger N" (used by the reducer and selectors)
     passengerInitial.ts       Label from a name ("Aarav Mehta" -> "AM", "Rahul" -> "R", "Passenger 2" -> "P2") (+ test)
   state/
     bookingReducer.ts         State, actions, getSeatClickOutcome, reducer, invariant check
     bookingReducer.test.ts    Vitest unit tests for the rules, totals, async seat map and edge cases
-    selectors.ts              Pure derived data (status, owner, totals, breakdown, active / first unseated passenger, seat lines, adjacent companion)
-    selectors.test.ts         Vitest tests for the newer selectors (getAdjacentCompanion, getFirstUnseatedPassenger, ...)
+    selectors.ts              Pure derived data (status, owner, totals, per-passenger breakdown, active / first unseated passenger, seat lines, adjacent companion, booking progress)
+    selectors.test.ts         Vitest tests for the newer selectors (getAdjacentCompanion, getFirstUnseatedPassenger, hasBookingProgress, ...)
   hooks/
     useSeatMap.ts             Loads the seat map for the current layout via fetchSeatMap; dispatches SEATS_LOADED / SEATS_FAILED
     useAnimatedNumber.ts      Eases a number toward its target (no animation with reduced motion)
     usePrefersReducedMotion.ts  Live `prefers-reduced-motion` flag (useSyncExternalStore)
     useHorizontalOverflow.ts  True while an element scrolls sideways (drives the "swipe sideways" hint)
+    useFocusAfterRender.ts    Moves focus to a target after the next render, so focus never drops to <body> when the focused control disappears
   context/
     BookingContext.tsx        Provider + useBooking / useBookingActions / useSeatClick
     ViewContext.tsx           UI-only active step view (`seats` | `meals`): ViewProvider + useMainView
@@ -63,13 +65,13 @@ src/
       Seat.tsx                Seat <button> with aria-label, hover card, roving tabindex; ignores double-clicks and held Enter
       SeatFace.tsx            Painted seat (38×40 / 38×46, state + category styling, 3px hover/focus ring); `swatch` size for the legend
       SeatHoverCard.tsx       Informational card above the hovered / focused seat (md+, role=tooltip, position: fixed so the cabin scroll box never clips it)
-      SeatDetails.tsx         SeatDetailsBar: mobile bottom bar for the last tapped seat
+      SeatDetailsBar.tsx      Mobile card for the last tapped seat; `sticky` above the bottom bar inside the seat map (never covers content)
       LayoutToggle.tsx        Segmented 3–2 / 2–3–2 control + confirm before clearing seats
       SeatLegend.tsx          One bar: Standard / Premium / Extra legroom with prices, divider, Your group, Taken
       seatDisplay.ts          Labels, aria-label builder, hover-card texts, toast variant mapping
       seatNavigation.ts       Pure arrow-key navigation over the seat grid (+ test)
     layout/
-      SiteHeader.tsx          Navy brand bar: logo + wordmark, Manage booking / Help / Start over (confirms if seats are assigned) / INR ₹
+      SiteHeader.tsx          Navy brand bar: logo + wordmark, Manage booking / Help / Start over (confirms whenever anything would be lost) / INR ₹
       FlightStrip.tsx         White strip: route, times, duration, flight facts, step indicator (one-line summary on phones)
       BookingSteps.tsx        Desktop `<nav aria-label="Booking progress"><ol>`: Travellers › Seats › Meals › Review
       MobileStepSwitch.tsx    Phone version: "Step 2 of 4 · Seats" + Seats / Meals buttons
@@ -79,17 +81,18 @@ src/
     passengers/
       PassengerPanel.tsx      Travellers card: title, "2 of 3 seated", count stepper, rows (md+) or chips (mobile)
       PassengerCountSelector.tsx  Compact − / count / + pill (1–6), confirm before dropping seated passengers
-      PassengerList.tsx       Maps passengers to rows, wires actions + "seat removed" toast
-      PassengerRow.tsx        One traveller row: avatar, name, "Adult · category", seat pill or "Now"; rename / remove-seat buttons on hover or focus
+      PassengerList.tsx       Maps passengers to rows (md+)
+      usePassengerActions.ts  rename / removeSeat with their toasts; shared by the list and the chips
+      PassengerRow.tsx        One traveller row: avatar, name, "Adult · category", seat pill or "Now"; rename / remove-seat buttons on hover or focus (always shown on touch screens); focus returns to the row when they close
       PassengerAvatar.tsx     Initials circle (navy when active, soft blue otherwise)
-      InlineNameEditor.tsx    Input that saves on Enter/blur and cancels on Esc
-      PassengerChips.tsx      Mobile horizontally scrollable passenger switcher
+      InlineNameEditor.tsx    Input that saves on Enter/blur and cancels on Esc (tells the caller whether it was a keyboard finish)
+      PassengerChips.tsx      Mobile horizontally scrollable passenger switcher + "Edit name of <active>" control
       SeatBadge.tsx           SeatBadge (seat code pill) and NowBadge (navy "Now" pill)
     summary/
       PriceSummary.tsx        Booking summary card: header, seat + meal lines, total, Continue + reason
       useContinueStep.ts      What Continue does for the open step (label, enabled, reason, proceed)
       ContinueButton.tsx      The primary button (aria-disabled + described by the reason text)
-      PriceBreakdown.tsx      Seat/meal lines + subtotals + grand total (used by the review dialog)
+      PriceBreakdown.tsx      Per passenger: seat + meal lines and subtotal (getPriceBreakdown), then seat / meal / grand totals (review dialog)
       ReviewDialog.tsx        Final step modal: "Review your selections" (Back / Confirm), then "You're all set" (Done / Start a new selection); rendered once in page.tsx
       SummarySidebar.tsx      md+ summary card (sticky from 1200px)
       MobileSummaryBar.tsx    <md fixed bottom bar: total, Details (sheet), Continue + reason
@@ -100,7 +103,7 @@ src/
     ui/
       Button.tsx              Button with primary / secondary / danger variants and md / lg sizes (`aria-disabled` styled like `disabled`)
       IconButton.tsx          Icon-only button (sm / md / lg); `label` is required (aria-label + title)
-      Icons.tsx               Inline SVG icons (pencil, close, plus, minus, check, chevron, plane, seat, logo)
+      Icons.tsx               Inline SVG icons (pencil, close, arrow-left, plus, minus, check, plane, logo)
       Modal.tsx               Native <dialog> base; `dialog` and bottom `sheet` variants
       ConfirmDialog.tsx       Confirm/cancel modal built on Modal
       Toast.tsx               ToastProvider + useToast (white card, colored status dot, 3s auto-dismiss, max 3, repeats replace, slide-in, aria-live)
@@ -116,7 +119,7 @@ src/
 - **SeatStatus** — `'available' | 'occupied' | 'selected-current' | 'selected-other'`. *Derived*, never stored: computed from `Seat.isOccupied` plus which passenger holds the seat, so it can't go out of sync.
 - **SeatPosition** — `'window' | 'middle' | 'aisle'`; used by pricing rules.
 - **Seat** — `{ id: "12C", row, column, category, price, isOccupied, position }`. Static facts about a seat. Who sits there is stored on the passenger, not the seat.
-- **LayoutConfig** — `{ id, label, columnGroups: string[][], rows }`. Aisles sit between column groups.
+- **LayoutConfig** — `{ id, label, columnGroups: ColumnGroups, rows, exitRows }`. `ColumnGroups` is `readonly (readonly string[])[]`; aisles sit between column groups. `exitRows` drives both the EXIT markers and extra-legroom pricing, so a layout's exits are configured in one place.
 - **Passenger** — `{ id, name, seatId | null, mealId | null }`. Single source of truth for assignments (seat → passenger is derived).
 - **MealOption** — `{ id, name, description, price, isVeg }`. The "No meal" card is a real option (`NO_MEAL_ID`, ₹0) but a passenger without a meal stores `mealId: null`.
 
@@ -124,13 +127,13 @@ src/
 
 One `useReducer` in `BookingProvider` (`src/context/BookingContext.tsx`). No external state library. All business rules live in `src/state/`; components only dispatch actions and read selectors.
 
-**State** (`BookingState`): `{ layoutId, seats, seatMapStatus, passengers, activePassengerId, mealsEnabled }`. Seat ownership is stored **only** on `Passenger.seatId`; everything else (seat status, owner, totals) is derived. `seats` is empty until `seatMapStatus` is `ready`. The app starts from `createLoadingState()`; `createInitialState()` is a state whose seats have already arrived (used by tests and by RESET on a loaded default layout).
+**State** (`BookingState`): `{ layoutId, seats, seatMapStatus, passengers, activePassengerId }`. Seat ownership is stored **only** on `Passenger.seatId`; everything else (seat status, owner, totals) is derived. `seats` is empty until `seatMapStatus` is `ready`. The app starts from `createLoadingState()`; `createInitialState()` is a state whose seats have already arrived (used by tests and by RESET on a loaded default layout).
 
 **Actions** (discriminated union `BookingAction`): `SET_PASSENGER_COUNT`, `SET_ACTIVE_PASSENGER`, `RENAME_PASSENGER`, `SET_LAYOUT`, `SEATS_LOADED`, `SEATS_FAILED`, `RETRY_SEATS`, `SEAT_CLICKED`, `REMOVE_SEAT`, `SELECT_MEAL`, `RESET`.
 
 **Context split**: state and dispatch are in two contexts, so components that only dispatch don't re-render on state changes. Hooks:
 - `useBooking()` → current state.
-- `useBookingActions()` → stable action creators (`setPassengerCount`, `setLayout`, `selectMeal`, `seatsLoaded`, `seatsFailed`, `retrySeats`, ...).
+- `useBookingActions()` → stable action creators, typed by the `BookingActions` interface (`setPassengerCount`, `setLayout`, `selectMeal`, `seatsLoaded`, `seatsFailed`, `retrySeats`, ...).
 - `useSeatClick()` → `(seatId) => SeatClickOutcome`; dispatches `SEAT_CLICKED` and returns what happened for the toast.
 
 **One rule engine for clicks.** `getSeatClickOutcome(state, seatId)` is a pure function that decides what a click means. The reducer calls it to decide whether/how to change state; the UI calls the same function to build the toast message. The rules exist in exactly one place.
@@ -203,32 +206,32 @@ Rules: cards are white with a 1px `#E3E8EF` border and 14px radius (at most a ve
 | Component | File | Responsibility | Props |
 |---|---|---|---|
 | `SeatMap` | `seat-map/SeatMap.tsx` | Persistent `role=region` wrapper that shows the skeleton, the error or the cabin depending on `status`. The cabin renders any `LayoutConfig`, owns roving focus, hover/focus-card and tapped-seat state, handles clicks (outcome → toast), remounts per layout and shows a "swipe sideways" hint when it overflows. Retry moves focus to the wrapper so keyboard users are not dropped | `status, onRetry` |
-| `CabinShell` / `CabinRows` | `seat-map/CabinShell.tsx` | The aircraft drawing: scroll box (`overflow-x: auto`; 96px side room for the wings from 640px, dropped together with the wings when `fuselage + 192px` does not fit the box, measured with `useHorizontalOverflow(ref, reservePx)`), fuselage (`190px 190px 44px 44px / 260px 260px 44px 44px` radius, 54px top padding, cockpit windows, front Galley / WC, column letters, rear WC · Galley · WC) and the row list with an exit row before each `EXIT_ROWS` row. Shared by the cabin and the skeleton so they stay the same size | `layout, children, scrollRef?` / `layout, renderRow` |
+| `CabinShell` / `CabinRows` | `seat-map/CabinShell.tsx` | The aircraft drawing: scroll box (`overflow-x: auto`; 96px side room for the wings from 640px, dropped together with the wings when `fuselage + 192px` does not fit the box, measured with `useHorizontalOverflow(ref, reservePx)`), fuselage (`190px 190px 44px 44px / 260px 260px 44px 44px` radius, 54px top padding, cockpit windows, front Galley / WC, column letters, rear WC · Galley · WC) and the row list with an exit row before each of `layout.exitRows`. Shared by the cabin and the skeleton so they stay the same size | `layout, children, scrollRef?` / `layout, renderRow` |
 | `SeatMapSkeleton` | `seat-map/SeatMapSkeleton.tsx` | Same fuselage with `#E9EDF2` seats in the real grid while loading; visually hidden "Loading the … seat map" status text | `layout` |
 | `SeatMapError` | `seat-map/SeatMapError.tsx` | `role=alert` card (red icon on `#FDECEA`) with message and Retry | `onRetry` |
 | `SeatRow` | `seat-map/SeatRow.tsx` | One row, maps columns to seats | `rowNumber, columnGroups, seatsByColumn, renderSeat` |
 | `CabinRow` | `seat-map/CabinRow.tsx` | Seat groups separated by 30px aisles; the row number is printed in the aisle(s) (aria-hidden, the row has `aria-label="Row N"`), not on both sides; reused for the column-letter header so columns align | `label, columnGroups, renderCell, decorative?` |
 | `Seat` | `seat-map/Seat.tsx` | Accessible `<button>` (`aria-label` "Seat 12C, Premium, ₹250, available"), `aria-disabled` when occupied so it still gives feedback. Ignores the second click of a double-click (`event.detail > 1`) and held-Enter repeats. The focus ring is drawn on the seat face. Renders the hover card while shown | `seat, status, owner?, activeName, companionName?, tabIndex, showCard, onSelect, onHover` |
 | `SeatFace` | `seat-map/SeatFace.tsx` | Visual of a seat per status and category (38×40, taller for extra legroom, 5px seat-back top border, 3px navy hover/focus ring). `size="swatch"` is the small chip used by the legend | `status, category, initial?, size?` |
-| `SeatHoverCard` / `SeatDetailsBar` | `seat-map/SeatHoverCard.tsx`, `SeatDetails.tsx` | Hover card (md+, shown above the hovered **or keyboard-focused** seat): seat id + price, "Premium · Aisle seat" (+ " · Next to <name>"), and "Click to select for <active>" / "Your seat — click to remove" / "Taken by <name>" / "Unavailable". `role="tooltip"`, linked by `aria-describedby`, no buttons. `position: fixed`, placed from the seat's bounding box (flips below when there is no room above), so the cabin's scroll box never clips it. `SeatDetailsBar` is the fixed bottom bar for the last tapped seat on mobile | card: `id, anchorRef, seat, status, activeName, ownerName?, companionName?` |
-| `ExitRow` | `seat-map/ExitRow.tsx` | Decorative row as wide as the fuselage with red "◂ EXIT" / "EXIT ▸" tags poking past both edges, drawn above rows listed in `EXIT_ROWS`. The first exit row also draws the two wings (`clip-path` polygons, ~96×250px, `#E3E8EF`, hidden below 640px and when the cabin box is too narrow) | `withWings` |
+| `SeatHoverCard` / `SeatDetailsBar` | `seat-map/SeatHoverCard.tsx`, `SeatDetailsBar.tsx` | Hover card (md+, shown above the hovered **or keyboard-focused** seat): seat id + price, "Premium · Aisle seat" (+ " · Next to <name>"), and "Click to select for <active>" / "Your seat — click to remove" / "Taken by <name>" / "Unavailable". `role="tooltip"`, linked by `aria-describedby`, no buttons. `position: fixed`, placed from the seat's bounding box (flips below when there is no room above), so the cabin's scroll box never clips it. `SeatDetailsBar` is the mobile card for the last tapped seat: `position: sticky` just above the bottom bar inside the seat map, so it travels with the cabin, takes its own room at the end and never hides the last rows | card: `id, anchorRef, seat, status, activeName, ownerName?, companionName?` |
+| `ExitRow` | `seat-map/ExitRow.tsx` | Decorative row as wide as the fuselage with red "◂ EXIT" / "EXIT ▸" tags poking past both edges, drawn above each row listed in the layout's `exitRows`. The first exit row also draws the two wings (`clip-path` polygons, ~96×250px, `#E3E8EF`, hidden below 640px and when the cabin box is too narrow) | `withWings` |
 | `LayoutToggle` | `seat-map/LayoutToggle.tsx` | Segmented control on a `#E9EDF2` track (active segment white with a soft shadow); if seats are assigned, asks to confirm before `SET_LAYOUT` | none |
 | `SeatLegend` | `seat-map/SeatLegend.tsx` | One white rounded bar, centered and wrapping: swatch + "Standard Free" / "Premium ₹250" / "Extra legroom ₹350" (prices from `CATEGORY_PRICE`), a divider, "Your group", "Taken" | none |
-| `SiteHeader` | `layout/SiteHeader.tsx` | Navy brand bar (min-height 56px, 1360px container): logo + wordmark `FLIGHT.brand`, Manage booking / Help (mock `#` links), Start over (asks for confirmation only when seats are assigned, then returns to the Seats step), and "INR ₹" behind a 1px divider. Phones keep Help + Start over | none |
+| `SiteHeader` | `layout/SiteHeader.tsx` | Navy brand bar (min-height 56px, 1360px container): logo + wordmark `FLIGHT.brand`, Manage booking / Help (mock `#` links), Start over (asks for confirmation whenever `hasBookingProgress` is true — an extra or renamed passenger, a seat or a meal — listing what will be cleared; then returns to the Seats step), and "INR ₹" behind a 1px divider. Phones keep Help + Start over | none |
 | `FlightStrip` | `layout/FlightStrip.tsx` | White strip with DEL 06:10 — "2h 15m · Non-stop" over a line with a plane — BOM 08:25, a divider and "Fri, 21 Nov · NA 2134 · N adults" (N = passenger count); the step indicator sits on the right. Below `md` it is one line ("DEL → BOM · 06:10 · Fri, 21 Nov") plus `MobileStepSwitch` | none |
 | `BookingSteps` | `layout/BookingSteps.tsx` | `<nav aria-label="Booking progress"><ol>`: Travellers (done) › Seats › Meals › Review, 22px circles joined by 20px lines. Done = navy circle + check; current = navy circle + number + `aria-current="step"`; upcoming = grey outline. Seats and Meals are buttons that switch the view (Left/Right arrows too); a completed, revisitable step (Seats while on Meals) has `aria-label="Go back to Seats"`, a pointer cursor and an underlined label on hover; Travellers and Review are not clickable. Replaces the old Seats/Meals tabs | none |
 | `MobileStepSwitch` | `layout/MobileStepSwitch.tsx` | "Step 2 of 4 · Seats" with the Seats / Meals switch as two buttons (`aria-current="step"`) | none |
 | `PassengerPanel` | `passengers/PassengerPanel.tsx` | White Travellers card: "Travellers" (16/700) with "2 of 3 seated" under it, the compact stepper on the right, then rows (md+) or chips (mobile, CSS only). No helper text or progress bar | `className?` |
 | `PassengerCountSelector` | `passengers/PassengerCountSelector.tsx` | Pill on `#F1F4F8`: − count + (34px buttons, "+" on white); buttons `disabled` at the limits. If `getSeatedPassengersRemovedBy` > 0 a `ConfirmDialog` asks first | none |
-| `PassengerList` / `PassengerRow` / `PassengerAvatar` | `passengers/` | One full-width row per traveller: 36px initials avatar (navy when active), name 14/600, sub-line "Adult · Premium" / "Adult · Selecting seat" / "Adult · No seat yet", and on the right the seat code pill, or a navy "Now" pill for the active passenger without a seat. Active row: 1.5px navy border, `#F4F7FB`, `aria-pressed` on its button and `aria-current` on the item. The pencil (rename inline, live counter near the 30-character limit, toast if the name changed) and ✕ (remove seat) buttons appear on row hover or `focus-within`, so they stay keyboard reachable | row: `passenger, seat, isActive, onSelect, onRename, onRemoveSeat` |
-| `MainArea` | `layout/MainArea.tsx` | The center column, with no card around it. Seats step: h1 "Select your seats" + "Choosing a seat for <active name>", layout toggle, legend, map. Meals step: h1 "Choose meals" + "For <active name>", meal grid. Calls `useSeatMap` so loading continues on the Meals step | `className?` |
+| `PassengerList` / `PassengerRow` / `PassengerAvatar` | `passengers/` | One full-width row per traveller: 36px initials avatar (navy when active), name 14/600, sub-line "Adult · Premium" / "Adult · Selecting seat" / "Adult · No seat yet", and on the right the seat code pill, or a navy "Now" pill for the active passenger without a seat. Active row: 1.5px navy border, `#F4F7FB`, `aria-pressed` on its button and `aria-current` on the item. The pencil (rename inline, live counter near the 30-character limit, toast if the name changed) and ✕ (remove seat) buttons appear on row hover or `focus-within`, so they stay keyboard reachable, and are always visible on touch screens (`pointer-coarse:`), where there is no hover. When the ✕ removes the seat, or Enter / Esc closes the name input, focus returns to the row button (`useFocusAfterRender`) instead of dropping to `<body>`. Rename and remove-seat (with their toasts) come from `usePassengerActions` | row: `passenger, seat, isActive, onSelect, onRename, onRemoveSeat` |
+| `MainArea` | `layout/MainArea.tsx` | The center column, with no card around it. Seats step: h1 "Select your seats" + "Choosing a seat for <active name>" (or, once `isBookingComplete`, "All travellers seated · click a traveller to change their seat"), layout toggle, legend, map. Meals step: h1 "Choose meals" + "For <active name>", meal grid. Calls `useSeatMap` so loading continues on the Meals step | `className?` |
 | `MealSelector` / `MealCard` / `DietIndicator` | `meals/` | Auto-fill grid of cards for the active passenger (white, 1px border, 12px radius; selected = 1.5px navy border, `#F4F7FB`, check icon; `aria-pressed`). Clicking dispatches `SELECT_MEAL`; the reducer toggles. Veg/non-veg shown as the Indian green/red mark (with an aria-label) and prices "Free"/₹ | card: `meal, isSelected, onSelect` |
-| `PassengerChips` | `passengers/PassengerChips.tsx` | Mobile chips (initials avatar + name + seat code), `aria-pressed` on the active one | none |
+| `PassengerChips` | `passengers/PassengerChips.tsx` | Mobile chips (initials avatar + name + seat code), `aria-pressed` on the active one, and under them an "Edit name of <active>" button that opens the same `InlineNameEditor` (phones have no hover actions); renames go through `usePassengerActions` | none |
 | `PriceSummary` | `summary/PriceSummary.tsx` | The Booking summary card with no inner padding on its root: header ("Booking summary", "DEL → BOM · Fri, 21 Nov"); middle with a "Seats" list ("Aarav Mehta · 4A … ₹250", "Free", or muted "Kabir Mehta … Not selected") and a "Meals" list ("Aarav Mehta · Paneer Tikka Wrap … ₹300"); footer on `#F8FAFC` with "Total" + 28/800 `AnimatedAmount`, the full-width 48px Continue button and the reason text under it | `onReview, onProceed?` |
 | `useContinueStep` / `ContinueButton` | `summary/` | The hook decides what the primary button does for the open step ("Continue to meals" → switches to Meals; on Meals "Review & confirm" → opens the review modal) and when it is blocked (`isBookingComplete`); the reason is "Pick a seat for <first unseated passenger> to continue", shown as text and as the button's `aria-describedby`. The button uses `aria-disabled` so it stays focusable | hook: `{ onProceed? }`; button: `step, size?, label?, className?` |
-| `PriceBreakdown` | `summary/PriceBreakdown.tsx` | Seat/meal lines + Seats / Meals subtotal + Grand total; now only used by the review dialog. All from selectors | none |
+| `PriceBreakdown` | `summary/PriceBreakdown.tsx` | Per passenger (`getPriceBreakdown`): name + subtotal, then the seat and meal line items; followed by Seats / Meals subtotal + Grand total. Used by the review dialog. All from selectors | none |
 | `ReviewDialog` | `summary/ReviewDialog.tsx` | One modal, two stages kept in `ViewContext.reviewStage` (`closed` / `review` / `confirmed`). `review`: title "Review your selections", flight line, `PriceBreakdown`, "Back" (closes) and "Confirm". `confirmed`: green check, "You're all set", "Your seats and meals are saved for DEL → BOM on Fri, 21 Nov.", "Done" (closes) and "Start a new selection" (reset, back to Seats). The copy deliberately avoids "booking" / "booked" / "paid": this is a selection demo, nothing is sent anywhere | none |
-| `SummarySidebar` / `MobileSummaryBar` | `summary/` | Sidebar card for `md+` (flex 1 1 280px, max 330px; sticky from 1200px); fixed bottom bar for `<md`: total (+ the reason when blocked), a "Details" button opening a bottom sheet with the summary, and a primary "Continue" | sidebar: `className?` |
+| `SummarySidebar` / `MobileSummaryBar` | `summary/` | Sidebar card for `md+` (flex 1 1 280px, max 330px; sticky from 1200px); fixed bottom bar for `<md`: total (+ the reason when blocked), a "Details" button opening a bottom sheet with the summary, and a primary "Continue". It has no back button of its own (the step switch and "Back to seats" above the meals cover that), so the total keeps its room at 320px | sidebar: `className?` |
 | `Button` | `ui/Button.tsx` | Variants `primary` (navy) / `secondary` / `danger`, sizes `md` (40px) / `lg` (48px, radius 10). Disabled and `aria-disabled` both render flat `#E3E8EF` with `#44505F` text | native button props + `variant?`, `size?` |
 | `IconButton` | `ui/IconButton.tsx` | Icon-only button (`sm` 28px, `md` 36px, `lg` 34px round); mandatory `label` becomes `aria-label` and `title` | `label, size?` + native props |
 | `Modal` | `ui/Modal.tsx` | Native `<dialog>.showModal()`: focus trap, inert background, Esc and focus restore. 14px radius, soft large shadow, navy backdrop. `sheet` variant docks to the bottom, has no padding and an `sr-only` title because it hosts the summary card with its own heading | `open, title, children, onClose, variant?` |
@@ -240,11 +243,11 @@ Rules: cards are white with a 1px `#E3E8EF` border and 14px radius (at most a ve
 
 **Motion.** All animation lives in `globals.css` inside `@media (prefers-reduced-motion: no-preference)`: seat select pop (`seat-pop`, on both selected statuses so it plays when a seat becomes selected and not when the active passenger changes), toast slide-in, skeleton pulse. A blanket `reduce` rule also shortens transitions. The total counting animation is JS, so `useAnimatedNumber` checks `usePrefersReducedMotion` and jumps straight to the value.
 
-**Keyboard.** Roving tabindex: one seat is in the Tab order. Arrow keys move through the grid (aisles skipped), Home/End jump to row ends, Enter/Space select. Pure logic in `seatNavigation.ts`. Focusing a seat shows its hover card, so keyboard users get the same information as mouse users. On the Seats / Meals step buttons Left / Right switch to the other step and move focus (`useStepKeyDown`). The rename / remove-seat buttons of a traveller row appear on `focus-within`.
+**Keyboard.** Roving tabindex: one seat is in the Tab order. Arrow keys move through the grid (aisles skipped), Home/End jump to row ends, Enter/Space select. Pure logic in `seatNavigation.ts`. Focusing a seat shows its hover card, so keyboard users get the same information as mouse users. On the Seats / Meals step buttons Left / Right switch to the other step and move focus (`useStepKeyDown`). The rename / remove-seat buttons of a traveller row appear on `focus-within`, and focus returns to the row when they close.
 
 ## 7. Flow of execution
 
-State flow: see the diagram in section 5. Seat generation: `generateSeatMap(layoutId)` → looks up `LAYOUTS[layoutId]` → for each row and column derives `position` → `getSeatCategory` (override → extra-legroom rows → premium rows → standard) → `getCategoryPrice` → `isSeatOccupied` (seeded hash) → `Seat[]`.
+State flow: see the diagram in section 5. Seat generation: `generateSeatMap(layoutId)` → looks up `LAYOUTS[layoutId]` → for each row and column derives `position` → `getSeatCategory` (override → bulkhead row 1 or one of `layout.exitRows` = extra legroom → premium rows → standard) → `getCategoryPrice` → `isSeatOccupied` (seeded hash) → `Seat[]`.
 
 **Seat click in the UI**
 
@@ -304,7 +307,7 @@ State flow: see the diagram in section 5. Seat generation: `generateSeatMap(layo
 | `md` and up | Brand bar with all links, full flight strip with the step indicator, summary card in the page. When the three flex items no longer fit on one row (about 1180px of viewport) the panels wrap onto their own rows |
 | `<md` | Brand bar: wordmark + Help + Start over; flight strip is one line plus "Step 2 of 4 · Seats" with the Seats / Meals buttons; the Travellers card shows chips; the cabin is full width without wings; a fixed bottom bar holds the total, Details and Continue (+ reason) |
 
-The cabin's scroll box (`overflow-x-auto`) has 96px of horizontal room on each side from 640px so the wings fit. When the fuselage plus that room does not fit the box (2–3–2 below about 1360px), the wings and the room are dropped, so the cabin fits without scrolling from about 1280px; only narrower boxes scroll sideways (seats stay 38px). The mobile seat-details bar sits above the summary bar via `--summary-bar-height`, and the page reserves bottom padding for the bar.
+The cabin's scroll box (`overflow-x-auto`) has 96px of horizontal room on each side from 640px so the wings fit. When the fuselage plus that room does not fit the box (2–3–2 below about 1360px), the wings and the room are dropped, so the cabin fits without scrolling from about 1280px; only narrower boxes scroll sideways (seats stay 38px). The mobile summary bar pads itself with `env(safe-area-inset-bottom)` (the viewport export sets `viewportFit: "cover"`, and `--summary-bar-height` includes the inset so the page padding and the details card follow). The mobile seat-details card is `sticky` above the summary bar via `--summary-bar-height`; being in the page flow it never covers the end of the seat map, and the page reserves bottom padding for the fixed summary bar.
 
 **Passenger count change**
 
@@ -319,8 +322,9 @@ The cabin's scroll box (`overflow-x-auto`) has 96px of horizontal room on each s
 **Rename / remove seat / select passenger**
 
 ```
- pencil -> InlineNameEditor (Enter or blur = RENAME_PASSENGER, Esc = cancel; reducer trims, 30 chars, empty -> "Passenger N")
- ✕ on a card -> REMOVE_SEAT + toast "Seat 12C removed from X"
+ pencil (row) or "Edit name of X" (mobile) -> InlineNameEditor (Enter or blur = RENAME_PASSENGER, Esc = cancel; reducer trims, 30 chars, empty -> "Passenger N")
+   Enter / Esc -> focus back on the row / edit button; blur leaves focus where the user put it
+ ✕ on a card -> REMOVE_SEAT + toast "Seat 12C removed from X" -> focus back on the row
  click card or chip -> SET_ACTIVE_PASSENGER -> next seat click goes to that passenger
 ```
 
@@ -330,7 +334,7 @@ The cabin's scroll box (`overflow-x-auto`) has 96px of horizontal room on each s
  Meals step (step indicator / mobile switch, or "Continue to meals")
  passenger rows / chips choose who the meals are for (the title says "For <name>")
  click a MealCard -> SELECT_MEAL { passengerId, mealId }
-   -> selectMeal(): unknown passenger/meal or mealsEnabled=false -> same state
+   -> selectMeal(): unknown passenger/meal                      -> same state
                     same meal again / null / NO_MEAL_ID          -> mealId = null
                     otherwise                                     -> mealId = id
  -> selectors: getMealSummaryLines / getMealsTotal / getGrandTotal -> Booking summary
@@ -363,7 +367,7 @@ The cabin's scroll box (`overflow-x-auto`) has 96px of horizontal room on each s
  mobile: bar (button label stays "Continue") shows total + reason + Details + Continue -> Details opens a sheet with the same PriceSummary (Continue there closes the sheet first)
 ```
 
-**Hover vs touch.** Mouse hover and keyboard focus show the seat hover card (`md` and up). On small screens there is no hover, so the last tapped seat's details appear in a bottom bar.
+**Hover vs touch.** Mouse hover and keyboard focus show the seat hover card (`md` and up). On small screens there is no hover, so the last tapped seat's details appear in a sticky card above the bottom bar.
 
 ## 8. Walkthrough: what runs, step by step
 
@@ -377,7 +381,7 @@ Scenario: open the page, set 3 passengers, click seat 1C, click 1C again, switch
       BookingProvider: useReducer(bookingReducer, undefined, () => createLoadingState())
         -> { layoutId '3-2', seats [], seatMapStatus 'loading',
              passengers [{ id 'passenger-1', name 'Passenger 1', seatId null, mealId null }],
-             activePassengerId 'passenger-1', mealsEnabled true }
+             activePassengerId 'passenger-1' }
       ViewProvider: view = 'seats', reviewStage = 'closed'.
  3. First render (identical on server and client, so hydration matches):
       SiteHeader, FlightStrip (+ BookingSteps: Travellers done, Seats current),
@@ -392,7 +396,7 @@ Scenario: open the page, set 3 passengers, click seat 1C, click 1C again, switch
            1  -> rejects SeatMapFetchError -> seatsFailed('3-2') -> SEATS_FAILED -> status 'error' -> SeatMapError + Retry
            else -> generateSeatMap('3-2') -> seatsLoaded('3-2', seats) -> SEATS_LOADED
  5. generateSeatMap: for each of 20 rows x columns A-E (100 seats):
-      getSeatPosition -> getSeatCategory (override -> extra legroom rows -> premium rows -> standard)
+      getSeatPosition -> getSeatCategory (override -> row 1 or an exit row of the layout = extra legroom -> premium rows -> standard)
       -> getCategoryPrice -> isSeatOccupied (FNV-1a hash of "3-2:<id>" % 100 < 20; overrides never occupied).
  6. Reducer: seatsLoaded -> isAwaitingSeats (status 'loading' AND layoutId matches) -> { seats, seatMapStatus 'ready' }.
  7. SeatMap renders <SeatMapContent key="3-2">: groupSeatsByRow, buildSeatGrid, and for every seat
@@ -465,7 +469,7 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
      -> owner === active -> { type 'removed', "Seat 1C removed from Passenger 1" }
      -> reducer sets passenger-1.seatId = null; no auto-advance (removing never advances);
         Passenger 1 stays active, the total returns to ₹0.
-   or press ✕ on the Passenger 1 row -> REMOVE_SEAT (PassengerList toasts "Seat 1C removed from Passenger 1").
+   or press ✕ on the Passenger 1 row -> REMOVE_SEAT (usePassengerActions toasts "Seat 1C removed from Passenger 1"; focus returns to the row).
 ```
 
 ### 8.5 Switch layout (3-2 -> 2-3-2)
@@ -494,17 +498,23 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
 | Name | File | Input → Output | Why it exists |
 |---|---|---|---|
 | `generateSeatMap` | `src/lib/generateSeatMap.ts` | `LayoutId → Seat[]` | Single place that builds a full cabin from config, so adding a layout is just data. |
+| `toSeatId` | `src/lib/generateSeatMap.ts` | `row, column → "12C"` | The one definition of the seat id format; used by the generator, the keyboard grid and `getAdjacentCompanion`. |
 | `getSeatPosition` (private) | `src/lib/generateSeatMap.ts` | column groups + indices → `SeatPosition` | Window = cabin edges; aisle = next to a gap; else middle. Works for any layout. |
-| `getSeatCategory` | `src/data/seatPricing.ts` | layout, seat id, row, position → `SeatCategory` | Centralises pricing rules with explicit overrides first. |
+| `getSeatCategory` | `src/data/seatPricing.ts` | `LayoutConfig`, seat id, row, position → `SeatCategory` | Centralises pricing rules with explicit overrides first; extra legroom comes from `BULKHEAD_ROW` and the layout's own `exitRows`. |
 | `getCategoryPrice` | `src/data/seatPricing.ts` | `SeatCategory → number` | Category → INR price lookup. |
 | `isSeatOccupied` | `src/data/seatPricing.ts` | layout, seat id → boolean | Deterministic ~20% occupancy via FNV-1a hash (no `Math.random`, so no hydration mismatch). |
 | `formatCurrency` | `src/lib/formatCurrency.ts` | `number, {forceZero?} → string` | Consistent ₹ formatting; "Free" for 0 unless `forceZero`. |
+| `formatCount` | `src/lib/formatCount.ts` | `count, singular, plural? → string` | "1 seat" / "2 seats": the one pluralisation rule for every dialog, toast and the flight strip. |
+| `defaultPassengerName` | `src/lib/passengerName.ts` | `index → "Passenger N"` | Default names for new passengers and empty renames; also lets `hasBookingProgress` spot a renamed passenger. |
 | `bookingReducer` | `src/state/bookingReducer.ts` | `(state, action) → state` | Pure transitions; runs the dev-only invariant check on every result. |
 | `createInitialState` | `src/state/bookingReducer.ts` | `(layoutId?, count?) → BookingState` | Deterministic start state (3-2 layout, 1 passenger, ids `passenger-N`). |
 | `getSeatClickOutcome` | `src/state/bookingReducer.ts` | `(state, seatId) → { type, reason?, message }` | Single source of truth for click rules; used by reducer and UI toast. |
 | `assertBookingInvariants` | `src/state/bookingReducer.ts` | `state → void` (throws) | Dev guard: no shared seats, valid seats, valid active passenger. |
 | `createLoadingState` | `src/state/bookingReducer.ts` | `(layoutId?, count?) → BookingState` | The app's start state: no seats yet, `seatMapStatus: 'loading'`. |
 | `resolvePassengerName` | `src/state/bookingReducer.ts` | `(rawName, index) → { name, notice }` | Single rule for what a typed name becomes (trim, 30 chars, empty → "Passenger N"); the reducer uses `name`, the UI toasts `notice`. |
+| `getSeatRemovedMessage` | `src/state/bookingReducer.ts` | `seatId, name → string` | "Seat 12C removed from X", shared by the seat-click outcome and the row's ✕ button. |
+| `usePassengerActions` | `src/components/passengers/usePassengerActions.ts` | `() → { rename, removeSeat }` | Rename / remove-seat plus their toasts, shared by the desktop rows and the mobile chips. |
+| `useFocusAfterRender` | `src/hooks/useFocusAfterRender.ts` | `() → { targetRef, requestFocus }` | Focuses a target after the next render, so focus does not drop to `<body>` when the focused control unmounts. |
 | `fetchSeatMap` | `src/data/mockApi.ts` | `LayoutId → Promise<Seat[]>` | Fake request: 600 ms, resolves with `generateSeatMap`, rejects when the URL has `?simulateError=1`. |
 | `useSeatMap` | `src/hooks/useSeatMap.ts` | `() → { status, retry }` | Runs the request while status is `loading` and feeds `SEATS_LOADED` / `SEATS_FAILED` into the reducer. |
 | `useAnimatedNumber` | `src/hooks/useAnimatedNumber.ts` | `(target, durationMs?) → number` | requestAnimationFrame easing toward `target`; returns `target` itself on first render and with reduced motion. |
@@ -515,16 +525,16 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
 | `getSeatStatus` | `src/state/selectors.ts` | state, seat → `SeatStatus` | Derives occupied / available / selected-current / selected-other. |
 | `getSeatOwner`, `getPassengerSeat` | `src/state/selectors.ts` | state, id → `Passenger` / `Seat` or undefined | Seat ↔ passenger lookups. |
 | `getSeatsTotal`, `getMealsTotal`, `getGrandTotal` | `src/state/selectors.ts` | state (, meals) → number | Price totals in INR; meals list is injectable for tests. |
-| `getPriceBreakdown` | `src/state/selectors.ts` | state (, meals) → per-passenger line items | Seat + meal line items and subtotal for the summary. |
-| `getAssignedCount` | `src/state/selectors.ts` | state → number | Passengers with a seat; used by the layout-switch confirmation. |
+| `getPriceBreakdown` | `src/state/selectors.ts` | state (, meals) → per-passenger line items | Seat + meal line items and subtotal per passenger; drives the review dialog's `PriceBreakdown`. |
+| `getAssignedCount`, `getMealCount` | `src/state/selectors.ts` | state → number | Passengers with a seat / a meal; used by the layout-switch and reset confirmations. |
+| `hasBookingProgress` | `src/state/selectors.ts` | state → boolean | True if "Start over" would lose anything: an extra or renamed passenger, a seat or a meal. Decides whether reset asks first. |
 | `getUnassignedCount` | `src/state/selectors.ts` | state → number | Passengers still without a seat. |
 | `isBookingComplete` | `src/state/selectors.ts` | state → boolean | Gate for Continue (both steps): every passenger has a seat. |
 | `getSeatedPassengersRemovedBy` | `src/state/selectors.ts` | state, newCount → number | How many seated passengers shrinking would drop (decides the confirm dialog). |
 | `getSelectedMealOptionId` | `src/state/selectors.ts` | state, passengerId → option id | Which meal card is highlighted; "No meal" when `mealId` is null. |
-| `hasPricedSelections` | `src/state/selectors.ts` | state → boolean | True if any seat or meal exists; decides summary empty state. |
 | `selectMeal` (private) | `src/state/bookingReducer.ts` | state, passengerId, mealId → state | Validates passenger/meal, toggles, clears on `null` / No meal. |
-| `getPassengerMeal` | `src/state/selectors.ts` | state, passengerId (, meals) → `MealOption` or undefined | A passenger's meal (feeds the summary lines); undefined while meals are disabled. |
-| `getSeatSummaryLines`, `getMealSummaryLines` | `src/state/selectors.ts` | state → lines | Display-ready rows for the summary and review dialog (seated passengers only). |
+| `getPassengerMeal` | `src/state/selectors.ts` | state, passengerId (, meals) → `MealOption` or undefined | A passenger's meal (feeds the summary lines). |
+| `getMealSummaryLines` | `src/state/selectors.ts` | state → lines | One display-ready line per passenger with a meal (summary card's Meals list). |
 | `getPassengerInitial` | `src/lib/passengerInitial.ts` | name → string | Label on a seat and in avatars: first + last word initials ("Aarav Mehta" → "AM"), one letter for one word, number kept for default names ("Passenger 2" → "P2"), emoji kept whole. |
 | `getActivePassenger` | `src/state/selectors.ts` | state → `Passenger` or undefined | The passenger the next seat click is for (page title, hover card). |
 | `getFirstUnseatedPassenger` | `src/state/selectors.ts` | state → `Passenger` or undefined | First passenger in order without a seat; names who to pick a seat for in the Continue reason. |
@@ -535,20 +545,20 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
 | `getSeatAriaLabel` | `src/components/seat-map/seatDisplay.ts` | seat, status, owner name → string | "Seat 12C, Premium, ₹250, available". |
 | `getSeatDescription`, `getSeatActionText` | `src/components/seat-map/seatDisplay.ts` | seat / status, names → string | "Premium · Aisle seat" and the hover card's last line ("Click to select for …", "Your seat — click to remove", "Taken by …", "Unavailable"). |
 | `buildSeatGrid`, `getNextSeatId` | `src/components/seat-map/seatNavigation.ts` | layout → ids per row; (grid, id, key) → next id | Arrow-key movement that works for any layout. |
-| `BookingProvider`, `useBooking`, `useBookingActions`, `useSeatClick` | `src/context/BookingContext.tsx` | n/a | Provider and typed hooks. |
+| `BookingProvider`, `useBooking`, `useBookingActions`, `useSeatClick` | `src/context/BookingContext.tsx` | n/a | Provider and typed hooks (`useBookingActions` returns the `BookingActions` interface). |
 | `ViewProvider`, `useMainView` | `src/context/ViewContext.tsx` | n/a | UI-only open step (`seats` / `meals`) and review dialog stage; `setView('seats')` also scrolls to the top. |
 | `getSeatById` | `src/state/selectors.ts` | `seats, seatId → Seat` or undefined | O(1) seat lookup through a `WeakMap` index cached per seats array; used by the click rules, the invariant check and the selectors. |
 | `getOutcomeToastVariant` | `src/components/seat-map/seatDisplay.ts` | outcome → toast variant | blocked → error, removed → info, assigned / changed → success. |
 | `getStatusLabel` | `src/components/seat-map/seatDisplay.ts` | status, owner name → string | Status words inside the seat `aria-label` ("available", "occupied", "selected by <name>"...). |
 | `isNavigationKey` | `src/components/seat-map/seatNavigation.ts` | key → type guard | True for arrows / Home / End so other keys are left alone. |
-| `PencilIcon`, `CloseIcon`, `PlusIcon`, `MinusIcon`, `CheckIcon`, `ChevronUpIcon`, `ArrowLeftIcon`, `PlaneIcon`, `SeatIcon`, `LogoIcon` | `src/components/ui/Icons.tsx` | `className?` → SVG | Inline decorative icons (`aria-hidden`); meaning comes from the button label. |
+| `PencilIcon`, `CloseIcon`, `PlusIcon`, `MinusIcon`, `CheckIcon`, `ArrowLeftIcon`, `PlaneIcon`, `LogoIcon` | `src/components/ui/Icons.tsx` | `className?` → SVG | Inline decorative icons (`aria-hidden`); meaning comes from the button label. |
 
-**Constants.** `MIN_PASSENGERS` (1), `MAX_PASSENGERS` (6), `MAX_NAME_LENGTH` (30) in `bookingReducer.ts`; `CATEGORY_PRICE`, `EXTRA_LEGROOM_ROWS`, `PREMIUM_ROW_RANGE`, `OCCUPANCY_RATE`, `CATEGORY_OVERRIDES` in `seatPricing.ts`; `LAYOUTS`, `LAYOUT_IDS` in `layouts.ts`; `EXIT_ROWS` in `cabin.ts`; `MEAL_OPTIONS`, `NO_MEAL_ID` in `meals.ts`; `FLIGHT` in `flight.ts`; `SEAT_MAP_DELAY_MS` (600), `SIMULATE_ERROR_PARAM` (`simulateError`) in `mockApi.ts`; `TOAST_DURATION_MS` (3000), `MAX_VISIBLE_TOASTS` (3) in `Toast.tsx`; `TOTAL_STEPS`, `SWITCHABLE_VIEWS` in `stepModel.ts`.
+**Constants.** `MIN_PASSENGERS` (1), `MAX_PASSENGERS` (6), `MAX_NAME_LENGTH` (30) in `bookingReducer.ts`; `CATEGORY_PRICE`, `BULKHEAD_ROW` (1), `PREMIUM_ROW_RANGE`, `OCCUPANCY_RATE`, `CATEGORY_OVERRIDES` in `seatPricing.ts`; `LAYOUTS` (each with its `exitRows`), `LAYOUT_IDS` in `layouts.ts`; `MEAL_OPTIONS`, `NO_MEAL_ID` in `meals.ts`; `FLIGHT` in `flight.ts`; `SEAT_MAP_DELAY_MS` (600), `SIMULATE_ERROR_PARAM` (`simulateError`) in `mockApi.ts`; `TOAST_DURATION_MS` (3000), `MAX_VISIBLE_TOASTS` (3) in `Toast.tsx`; `TOTAL_STEPS`, `SWITCHABLE_VIEWS` in `stepModel.ts`.
 
 ## 10. Business rules & edge cases
 
 - Prices: Standard ₹0, Premium ₹250, Extra Legroom ₹350.
-- Row 1 and exit row 10 are Extra Legroom.
+- Row 1 (the bulkhead) and every exit row of the layout (`exitRows`, row 10 in both layouts) are Extra Legroom.
 - Rows 2–5: window and aisle seats Premium, middle seats Standard.
 - Everything else Standard.
 - Explicit override map for the 3-2 layout to match the sample: 1A ₹0, 1B ₹0, 1C ₹350 (XL), 1D ₹0, 1E ₹250 (Premium), 2A ₹350 (XL), 2B ₹0. Overrides beat the row rules (e.g. 1A would otherwise be XL).
@@ -567,20 +577,20 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
   - f) After a new assignment (`assigned`/`changed`), the active passenger moves to the next passenger without a seat (in order, wrapping); if everyone is seated, it stays. Removing a seat never auto-advances.
   - Extra: an unknown seat id is blocked (`unknown-seat`), so a stale click can't corrupt state.
 - Toast messages come straight from `outcome.message`, e.g. "Seat 12C assigned to Rahul — ₹250", "Seat 4A is already occupied", "Seat 3B is taken by Passenger 2", "Select a passenger first".
-- Exit row 10 is marked with an EXIT strip (`EXIT_ROWS` in `src/data/cabin.ts`).
+- Exit rows are marked with an EXIT strip. Both the strip and the extra-legroom price come from the same `LayoutConfig.exitRows`, so they cannot disagree.
 - Blocked clicks return the **same state object**, so React skips the re-render.
 - Passenger count is clamped to 1–6. Growing adds "Passenger N"; shrinking removes from the end, which frees their seats and meals automatically (ownership is on the passenger). If the active passenger is removed, the last remaining one becomes active. When growing, if the active passenger already has a seat the first newly added passenger becomes active (so the next seat click seats the new person instead of moving the seated one); if the active passenger has no seat they stay active.
 - Rename: trimmed, max 30 chars, empty → "Passenger N" (N = position). `resolvePassengerName` decides; when the result differs from what was typed (empty or too long) a toast explains it.
 - Switching layout drops the seats, clears every seat assignment (seat ids differ between layouts) and reloads the new layout's seats asynchronously; meals, names and the passenger count are kept.
-- `mealsEnabled` is state (default `true`); when false, meal totals are 0 and `SELECT_MEAL` is ignored. No action toggles it yet.
 - Meals (INR): No meal ₹0, Standard Veg Sandwich Free, Paneer Tikka Wrap ₹300, Chicken Biryani ₹400 (non-veg), Fruit & Yogurt Bowl ₹200, Jain Meal ₹250. One meal per passenger; choosing the same meal again, or No meal, clears it. Meals are independent of seats (a passenger can have a meal before a seat). Meals count toward the grand total and are kept when the layout changes; removed passengers take their meal with them.
 - Shrinking the passenger count asks for confirmation only if a passenger who would be removed has a seat.
 - Continue is enabled only when every passenger has a seat (`isBookingComplete`), on both steps. It uses `aria-disabled` rather than `disabled`, so keyboard users can focus it; the reason ("Pick a seat for <first unseated passenger> to continue") is plain text under the button. On the Seats step it reads "Continue to meals" and switches to the Meals step; on the Meals step it reads "Review & confirm" and opens the review modal (see `ReviewDialog`). The sub-line of a traveller row wraps instead of truncating ("Adult · Extra legroom").
 - The step indicator is four steps: Travellers (always done), Seats, Meals, Review. Only Seats and Meals can be clicked; the step before the open one shows as done. Review is a label only.
 - Initials: first letter of the first and last word ("Aarav Mehta" → "AM"); a name ending in a number keeps it ("Passenger 1" → "P1"); one word gives one letter; emoji stay whole.
 - A seat of a non-active passenger is "your group" (soft blue); the active passenger's seat is navy.
-- The booking summary lists every passenger under Seats ("Not selected" while unseated, "Free" for a free seat) and only passengers with a meal under Meals ("None selected" otherwise). The review dialog shows seat lines for seated passengers plus the Seats / Meals subtotals and the grand total.
-- Reset ("Start over" in the brand bar) asks for confirmation only when seats are assigned, and returns to 1 passenger on the default layout and to the Seats step.
+- The booking summary lists every passenger under Seats ("Not selected" while unseated, "Free" for a free seat) and only passengers with a meal under Meals ("None selected" otherwise). The review dialog groups the prices per passenger (seat and meal line items with a subtotal) and then shows the Seats / Meals subtotals and the grand total.
+- Reset ("Start over" in the brand bar) asks for confirmation whenever anything would be lost (`hasBookingProgress`: an extra or renamed passenger, a seat or a meal) and lists the counts; it returns to 1 passenger on the default layout and to the Seats step. An untouched booking resets straight away.
+- `REMOVE_SEAT` for a passenger without a seat (or an unknown one) returns the same state object.
 - Seats are 38px wide; the map scrolls horizontally rather than shrinking.
 - Totals are computed by selectors from seats + passengers; never stored.
 - Seat map request: `fetchSeatMap` takes 600 ms and fails when the URL has `?simulateError=1` (documented in the README). `SEATS_LOADED` / `SEATS_FAILED` are accepted only while loading and only for the current layout; `RETRY_SEATS` only acts on an error. RESET keeps a loaded default-layout seat map and otherwise reloads it (so it also acts as a retry).
@@ -593,13 +603,17 @@ Because of the auto-advance in 8.3, the active passenger is now Passenger 2, not
 | Click an occupied seat / another passenger's seat | Blocked by rules (b) / (c); error toast names the seat and the owner; same state object, so no re-render. |
 | Rapid double-click on a seat | The second click (`event.detail > 1`) is ignored, so a double-click assigns once instead of assigning then releasing. Holding Enter on a focused seat is ignored too (`event.repeat`). Identical toasts replace each other instead of stacking. Plain single clicks still toggle. |
 | Rename to empty | Falls back to "Passenger N" and a toast says so. |
+| Rename on a phone | The chips have no hover actions, so an "Edit name of <active>" button under them opens the same inline editor. |
+| Touch tablet (md+, no hover) | The row's rename / remove-seat buttons are always visible (`pointer-coarse:`), not hover-only. |
+| Focused control disappears | Removing a seat with ✕, or closing the name input with Enter / Esc, returns focus to the row (or the mobile edit button) instead of `<body>`. A blur commit leaves focus where the user put it. |
+| Start over with only names / meals / extra passengers | Still asks first (`hasBookingProgress`), listing passengers, seats and meals that will be cleared. |
 | Rename to a very long name | The input caps at 30 characters with a live counter (shown from 24, red at the limit); pasted text is cut to 30; long names truncate on rows and chips and wrap in toasts, summary lines and the hover card. Emoji initials stay whole. |
 | Shrink passenger count with seated passengers | Confirm dialog states how many seated passengers go; the active passenger falls back to the last remaining one; toast afterwards. |
 | Switch layout with assignments | Confirm dialog with the count; after confirming the toast repeats how many selections were cleared; skeleton while the new map loads; a slower answer for a layout the user already left is ignored. |
 | Everyone seated | Auto-advance finds no unseated passenger and keeps the current one (no error). Re-seating or toggling off still works and keeps the same active passenger (unit tested). |
 | Seat map fails | Error card with Retry; Retry shows the skeleton again; switching layout or RESET also tries again. Passengers and meals are untouched. |
 | Meals step open while the map loads | Loading continues (the hook lives in `MainArea`), so the map is ready when the user returns. |
-| 320 px screens | No page-level horizontal scroll. 3-2 fits; 2-3-2 is wider than the screen, so the map scrolls inside its own box and a hint appears only while it overflows. Seats stay 38 px. |
+| 320 px screens | No page-level horizontal scroll. The bottom bar has only the total, Details and Continue (no extra back button), so the total keeps its room. The tapped-seat card is sticky inside the map, so it never hides the last rows. 3-2 fits; 2-3-2 is wider than the screen, so the map scrolls inside its own box and a hint appears only while it overflows. Seats stay 38 px. |
 | 1920 px screens | The page is capped at 1360px and centered; the cabin stays centered in its column. |
 | Hover card on the first rows | The cabin sits in an `overflow-x: auto` box, which would clip a card drawn above row 1. The card is `position: fixed`, placed from the seat's bounding box, and flips below the seat when there is no room above. |
 
@@ -615,7 +629,7 @@ Storing it duplicates information already in `Seat.isOccupied` and `Passenger.se
 No `Math.random`/`Date.now` at render. Occupancy uses a seeded FNV-1a hash of the seat id, so server and client generate identical maps.
 
 **How would you add a new layout?**
-Add a `LayoutConfig` to `layouts.ts` and extend `LayoutId`. Seat positions and pricing are derived, so `generateSeatMap` needs no changes.
+Add a `LayoutConfig` to `layouts.ts` (column groups, rows, exit rows) and extend `LayoutId`. Seat positions, exit markers and pricing are derived from it, so `generateSeatMap` and the components need no changes.
 
 **Why an override map for pricing?**
 The sample design contradicts the general rules for a few seats. An explicit, data-only override keeps the rules clean and the exceptions visible.
@@ -639,7 +653,7 @@ Dispatch is stable. Components that only trigger actions don't re-render when st
 Vitest unit tests (`npm test`) cover click rules a–f, passenger shrinking, layout switching, meal selection (select, replace, toggle off, unknown ids, free vs paid totals), totals and the invariant check. The reducer is pure, so tests need no React.
 
 **How is the seat map layout-agnostic?**
-`SeatMap` only reads `LayoutConfig.columnGroups` and `rows`. Aisles are rendered between groups, and the header and rows share one `CabinRow` component so columns always line up. Adding a layout needs no component changes.
+`SeatMap` only reads `LayoutConfig.columnGroups`, `rows` and `exitRows`. Aisles are rendered between groups, and the header and rows share one `CabinRow` component so columns always line up. Adding a layout needs no component changes.
 
 **How do you make seat states accessible?**
 Each seat is a real `<button>` with an `aria-label` that states id, category, price and status. States differ by shape and glyph (✕, initial, dot, taller legroom seats), not just color. Occupied seats use `aria-disabled` rather than `disabled` so they stay focusable and still explain themselves via a toast.
@@ -733,3 +747,12 @@ Replace `fetchSeatMap` with a real request; the reducer already models `loading`
 
 **What would you test next?**
 Component tests for the dialogs and the seat map interactions (React Testing Library) and an end-to-end run of the happy path (Playwright). The business rules already sit in pure functions, so they are covered by plain unit tests with no DOM.
+
+**Why does "Start over" ask even when no seat is chosen?**
+Resetting also drops extra passengers, their names and their meals. `hasBookingProgress` (a selector) reports whether anything differs from a fresh booking, so the confirmation appears exactly when work would be lost, and an untouched booking resets without a pointless dialog.
+
+**Why are the exit rows part of `LayoutConfig`?**
+They used to be listed twice: once for drawing the EXIT strip and once (as a hard-coded row number) for extra-legroom pricing. A layout that moved its exit would have shown the strip on one row and charged the legroom price on another. With `exitRows` on the layout, both read the same data, and each layout can have its own exits.
+
+**How do you avoid losing keyboard focus when a control removes itself?**
+`useFocusAfterRender` returns a ref and `requestFocus()`. The handler (✕ remove seat, Enter / Esc in the name input) calls `requestFocus()` before dispatching; after the re-render an effect focuses the row button. A blur commit does not request focus, because the user already moved it somewhere on purpose.

@@ -1,7 +1,6 @@
 import { useRef, type ReactNode, type RefObject } from 'react';
 import { CabinRow } from '@/components/seat-map/CabinRow';
 import { ExitRow } from '@/components/seat-map/ExitRow';
-import { EXIT_ROWS } from '@/data/cabin';
 import { useHorizontalOverflow } from '@/hooks/useHorizontalOverflow';
 import type { LayoutConfig } from '@/types';
 
@@ -79,7 +78,7 @@ export function CabinShell({
   );
 }
 
-/** Every row of the layout, with an exit marker above exit rows. */
+/** Every row of the layout, with an exit marker above each of its exit rows. */
 export function CabinRows({
   layout,
   renderRow,
@@ -93,8 +92,8 @@ export function CabinRows({
         const rowNumber = index + 1;
         return (
           <div key={rowNumber} className="contents">
-            {EXIT_ROWS.includes(rowNumber) && (
-              <ExitRow withWings={rowNumber === EXIT_ROWS[0]} />
+            {layout.exitRows.includes(rowNumber) && (
+              <ExitRow withWings={rowNumber === layout.exitRows[0]} />
             )}
             {renderRow(rowNumber)}
           </div>

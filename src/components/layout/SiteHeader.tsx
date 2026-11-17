@@ -7,7 +7,12 @@ import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
 import { useMainView } from '@/context/ViewContext';
 import { FLIGHT } from '@/data/flight';
-import { getAssignedCount } from '@/state/selectors';
+import { formatCount } from '@/lib/formatCount';
+import {
+  getAssignedCount,
+  getMealCount,
+  hasBookingProgress,
+} from '@/state/selectors';
 
 const NAV_ITEM_CLASSES =
   'rounded-md text-sm font-medium text-nav-ink transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
@@ -20,7 +25,11 @@ export function SiteHeader() {
   const { showToast } = useToast();
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const assignedCount = getAssignedCount(state);
+  const lostItems = [
+    formatCount(state.passengers.length, 'passenger'),
+    formatCount(getAssignedCount(state), 'seat'),
+    formatCount(getMealCount(state), 'meal'),
+  ].join(', ');
 
   function performReset() {
     reset();
@@ -48,7 +57,9 @@ export function SiteHeader() {
           </a>
           <button
             type="button"
-            onClick={() => (assignedCount > 0 ? setIsConfirming(true) : performReset())}
+            onClick={() =>
+              hasBookingProgress(state) ? setIsConfirming(true) : performReset()
+            }
             className={NAV_ITEM_CLASSES}
           >
             Start over
@@ -66,9 +77,8 @@ export function SiteHeader() {
         onConfirm={performReset}
         onCancel={() => setIsConfirming(false)}
       >
-        This clears {assignedCount} seat{' '}
-        {assignedCount === 1 ? 'selection' : 'selections'} and returns to a single
-        passenger.
+        This clears everything you have chosen ({lostItems}) and starts again
+        with a single passenger.
       </ConfirmDialog>
     </header>
   );
