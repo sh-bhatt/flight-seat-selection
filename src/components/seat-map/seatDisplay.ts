@@ -27,6 +27,29 @@ export function getStatusLabel(status: SeatStatus, ownerName?: string): string {
   }
 }
 
+/** e.g. "Premium · Aisle seat" */
+export function getSeatDescription(seat: Seat): string {
+  return `${CATEGORY_LABEL[seat.category]} · ${POSITION_LABEL[seat.position]} seat`;
+}
+
+/** What a click on the seat would do, as the last line of the hover card. */
+export function getSeatActionText(
+  status: SeatStatus,
+  activeName: string,
+  ownerName?: string,
+): string {
+  switch (status) {
+    case 'available':
+      return `Click to select for ${activeName}`;
+    case 'selected-current':
+      return 'Your seat — click to remove';
+    case 'selected-other':
+      return `Taken by ${ownerName ?? 'another passenger'}`;
+    case 'occupied':
+      return 'Unavailable';
+  }
+}
+
 /** e.g. "Seat 12C, Premium, ₹250, available" */
 export function getSeatAriaLabel(
   seat: Seat,

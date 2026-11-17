@@ -17,10 +17,11 @@ export function MealCard({ meal, isSelected, onSelect }: MealCardProps) {
       type="button"
       aria-pressed={isSelected}
       onClick={() => onSelect(meal.id)}
-      className={`flex h-full w-full flex-col gap-2 rounded-xl border-2 p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      // Padding shrinks by the extra 0.5px of border so the card never changes size.
+      className={`flex h-full w-full flex-col gap-2 rounded-xl text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${
         isSelected
-          ? 'border-accent bg-accent-soft shadow-sm'
-          : 'border-line bg-surface hover:border-seat-standard-line'
+          ? 'border-[1.5px] border-navy bg-selected p-[13.5px]'
+          : 'border border-line bg-surface p-3.5 hover:border-seat-standard-line'
       }`}
     >
       <span className="flex items-start justify-between gap-2">
@@ -28,12 +29,10 @@ export function MealCard({ meal, isSelected, onSelect }: MealCardProps) {
           {!isNoMeal && <DietIndicator isVeg={meal.isVeg} />}
           {meal.name}
         </span>
-        {isSelected && (
-          <CheckIcon className="size-4 shrink-0 text-accent" aria-hidden />
-        )}
+        {isSelected && <CheckIcon className="size-4 shrink-0 text-navy" aria-hidden />}
       </span>
       <span className="text-xs text-ink-muted">{meal.description}</span>
-      <span className="mt-auto text-sm font-semibold tabular-nums">
+      <span className="mt-auto text-sm font-bold tabular-nums">
         {formatCurrency(meal.price)}
       </span>
     </button>

@@ -2,10 +2,10 @@ import { CabinRow } from '@/components/seat-map/CabinRow';
 import { CabinRows, CabinShell } from '@/components/seat-map/CabinShell';
 import type { LayoutConfig } from '@/types';
 
-/** Placeholder cabin shown while the seat map loads: same grid, grey seats. */
+/** Placeholder cabin shown while the seat map loads: same fuselage, grey seats. */
 export function SeatMapSkeleton({ layout }: { layout: LayoutConfig }) {
   return (
-    <div className="overflow-x-auto pb-2">
+    <div>
       <p role="status" className="sr-only">
         Loading the {layout.label} seat map…
       </p>
@@ -19,7 +19,7 @@ export function SeatMapSkeleton({ layout }: { layout: LayoutConfig }) {
                 label={String(rowNumber)}
                 columnGroups={layout.columnGroups}
                 renderCell={() => (
-                  <span className="skeleton block h-9 w-9 rounded-t-lg rounded-b-sm" />
+                  <span className="skeleton block h-10 w-[38px] rounded-[10px_10px_6px_6px]" />
                 )}
               />
             )}

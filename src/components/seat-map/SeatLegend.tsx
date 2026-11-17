@@ -3,90 +3,48 @@ import { SeatFace } from '@/components/seat-map/SeatFace';
 import { CATEGORY_LABEL } from '@/components/seat-map/seatDisplay';
 import { CATEGORY_PRICE } from '@/data/seatPricing';
 import { formatCurrency } from '@/lib/formatCurrency';
-import type { SeatCategory, SeatStatus } from '@/types';
-
-const STATUS_ENTRIES: readonly {
-  status: SeatStatus;
-  label: string;
-  initial?: string;
-}[] = [
-  { status: 'available', label: 'Available' },
-  { status: 'selected-current', label: 'Selected (active passenger)', initial: 'P1' },
-  { status: 'selected-other', label: 'Selected (other passenger)', initial: 'P2' },
-  { status: 'occupied', label: 'Occupied' },
-];
+import type { SeatCategory } from '@/types';
 
 const CATEGORIES = Object.keys(CATEGORY_PRICE) as SeatCategory[];
 
-function LegendGroup({
-  title,
-  hint,
-  hintArrow = false,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  /** Adds a → pointing at the next column; hidden when columns stack. */
-  hintArrow?: boolean;
-  children: ReactNode;
-}) {
+function LegendItem({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
   return (
-    <section>
-      <h3 className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
-        {title}
-      </h3>
-      <p className="mt-1 mb-2 min-h-4 text-xs text-ink-muted">
-        {hint}
-        {hint && hintArrow && (
-          <span aria-hidden="true" className="hidden sm:inline">
-            {' '}
-            →
-          </span>
-        )}
-      </p>
-      <ul className="flex flex-col gap-2">{children}</ul>
-    </section>
+    <li className="flex items-center gap-2 text-[13px] text-ink-secondary">
+      {swatch}
+      <span>{children}</span>
+    </li>
   );
 }
 
+/** One bar: the three seat types with prices, then "Your group" and "Taken". */
 export function SeatLegend() {
   return (
-    <div className="grid gap-5 rounded-2xl border border-line bg-surface p-5 sm:grid-cols-2">
-      <LegendGroup
-        title="Seat status"
-        hint="Available seats are tinted by seat type"
-        hintArrow
+    <ul
+      aria-label="Seat legend"
+      className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-xl border border-line bg-surface px-4 py-3"
+    >
+      {CATEGORIES.map((category) => (
+        <LegendItem
+          key={category}
+          swatch={<SeatFace size="swatch" status="available" category={category} />}
+        >
+          {CATEGORY_LABEL[category]}{' '}
+          <span className="font-bold text-foreground tabular-nums">
+            {formatCurrency(CATEGORY_PRICE[category])}
+          </span>
+        </LegendItem>
+      ))}
+      <li aria-hidden="true" className="h-5 w-px bg-line" />
+      <LegendItem
+        swatch={<SeatFace size="swatch" status="selected-other" category="standard" />}
       >
-        {STATUS_ENTRIES.map(({ status, label, initial }) => (
-          <li key={status} className="flex items-center gap-3 text-sm">
-            <SeatFace
-              status={status}
-              category="standard"
-              initial={initial}
-              neutral
-            />
-            {label}
-          </li>
-        ))}
-      </LegendGroup>
-      <LegendGroup title="Seat type">
-        {CATEGORIES.map((category) => (
-          <li key={category} className="flex items-center gap-3 text-sm">
-            <SeatFace
-              status="available"
-              category={category}
-              isFree={CATEGORY_PRICE[category] === 0}
-            />
-            <span className="flex-1">
-              {CATEGORY_LABEL[category]}
-              {CATEGORY_PRICE[category] === 0 && ' · no extra charge'}
-            </span>
-            <span className="font-semibold tabular-nums">
-              {formatCurrency(CATEGORY_PRICE[category])}
-            </span>
-          </li>
-        ))}
-      </LegendGroup>
-    </div>
+        Your group
+      </LegendItem>
+      <LegendItem
+        swatch={<SeatFace size="swatch" status="occupied" category="standard" />}
+      >
+        Taken
+      </LegendItem>
+    </ul>
   );
 }

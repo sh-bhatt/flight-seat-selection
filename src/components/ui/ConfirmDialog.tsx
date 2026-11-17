@@ -26,7 +26,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Modal open={open} title={title} onClose={onCancel}>
-      <div className="text-sm text-ink-muted">{children}</div>
+      <div className="text-sm text-ink-secondary">{children}</div>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel} autoFocus>
           {cancelLabel}

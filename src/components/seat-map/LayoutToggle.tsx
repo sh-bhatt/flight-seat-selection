@@ -49,7 +49,7 @@ export function LayoutToggle() {
       <div
         role="group"
         aria-label="Cabin layout"
-        className="inline-flex rounded-xl border border-line bg-surface-sunken p-1"
+        className="inline-flex rounded-[10px] bg-track p-[3px]"
       >
         {LAYOUT_IDS.map((layoutId) => {
           const isActive = layoutId === state.layoutId;
@@ -60,10 +60,10 @@ export function LayoutToggle() {
               aria-pressed={isActive}
               aria-label={`Layout ${LAYOUTS[layoutId].label}`}
               onClick={() => requestLayout(layoutId)}
-              className={`h-9 min-w-20 rounded-lg px-4 text-sm font-semibold tabular-nums transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              className={`h-8 min-w-[4.5rem] rounded-lg px-4 text-[13px] font-bold tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy ${
                 isActive
-                  ? 'bg-accent text-accent-ink shadow-sm'
-                  : 'text-ink-muted hover:text-foreground'
+                  ? 'bg-surface text-foreground shadow-[0_1px_3px_rgba(10,37,64,0.18)]'
+                  : 'text-ink-secondary hover:text-foreground'
               }`}
             >
               {formatLayoutLabel(layoutId)}

@@ -1,15 +1,17 @@
-interface SeatBadgeProps {
-  seatId: string | null;
+/** Assigned seat code as a pill, e.g. "12A". */
+export function SeatBadge({ seatId }: { seatId: string }) {
+  return (
+    <span className="rounded-md bg-surface-sunken px-2.5 py-1 text-[13px] leading-none font-bold tabular-nums">
+      {seatId}
+    </span>
+  );
 }
 
-/** Assigned seat as a pill, or a muted "No seat". */
-export function SeatBadge({ seatId }: SeatBadgeProps) {
-  if (seatId === null) {
-    return <span className="text-xs text-ink-muted">No seat</span>;
-  }
+/** Marks the passenger who gets the next seat click. */
+export function NowBadge() {
   return (
-    <span className="rounded-md bg-accent-soft px-2 py-0.5 text-xs font-bold tabular-nums text-accent">
-      {seatId}
+    <span className="rounded-md bg-navy px-2 py-1 text-xs leading-none font-bold text-white">
+      Now
     </span>
   );
 }

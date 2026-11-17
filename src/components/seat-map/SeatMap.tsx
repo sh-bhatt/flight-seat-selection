@@ -18,6 +18,8 @@ import { useBooking, useSeatClick } from '@/context/BookingContext';
 import { LAYOUTS } from '@/data/layouts';
 import { useHorizontalOverflow } from '@/hooks/useHorizontalOverflow';
 import {
+  getActivePassenger,
+  getAdjacentCompanion,
   getSeatById,
   getSeatOwner,
   getSeatStatus,
@@ -54,9 +56,10 @@ function SeatMapContent() {
 
   // Roving tabindex: exactly one seat is in the Tab order.
   const [focusedSeatId, setFocusedSeatId] = useState(seatGrid[0][0]);
-  const [tooltipSeatId, setTooltipSeatId] = useState<string | null>(null);
+  const [cardSeatId, setCardSeatId] = useState<string | null>(null);
   const [tappedSeatId, setTappedSeatId] = useState<string | null>(null);
 
+  const activeName = getActivePassenger(state)?.name ?? 'a passenger';
   const tappedSeat = tappedSeatId
     ? getSeatById(state.seats, tappedSeatId)
     : undefined;
@@ -80,51 +83,52 @@ function SeatMapContent() {
   }
 
   function renderSeat(seat: SeatModel) {
+    const showCard = seat.id === cardSeatId;
     return (
       <Seat
         seat={seat}
         status={getSeatStatus(state, seat)}
         owner={getSeatOwner(state, seat.id)}
+        activeName={activeName}
+        companionName={showCard ? getAdjacentCompanion(state, seat)?.name : undefined}
         tabIndex={seat.id === focusedSeatId ? 0 : -1}
-        showTooltip={seat.id === tooltipSeatId}
+        showCard={showCard}
         onSelect={selectSeat}
-        onHover={setTooltipSeatId}
+        onHover={setCardSeatId}
       />
     );
   }
 
   return (
     <div>
-      <div ref={scrollRef} className="overflow-x-auto pb-2">
-        <CabinShell layout={layout}>
-          <div
-            ref={gridRef}
-            role="grid"
-            aria-label={`Seat map, ${layout.label}`}
-            className="mt-2 flex flex-col gap-1.5"
-            onKeyDown={handleKeyDown}
-            onFocus={(event) => {
-              const seatId = readSeatId(event.target);
-              if (!seatId) return;
-              setFocusedSeatId(seatId);
-              setTooltipSeatId(seatId);
-            }}
-            onBlur={() => setTooltipSeatId(null)}
-          >
-            <CabinRows
-              layout={layout}
-              renderRow={(rowNumber) => (
-                <SeatRow
-                  rowNumber={rowNumber}
-                  columnGroups={layout.columnGroups}
-                  seatsByColumn={seatsByRow.get(rowNumber) ?? new Map()}
-                  renderSeat={renderSeat}
-                />
-              )}
-            />
-          </div>
-        </CabinShell>
-      </div>
+      <CabinShell layout={layout} scrollRef={scrollRef}>
+        <div
+          ref={gridRef}
+          role="grid"
+          aria-label={`Seat map, ${layout.label}`}
+          className="mt-2 flex flex-col gap-1.5"
+          onKeyDown={handleKeyDown}
+          onFocus={(event) => {
+            const seatId = readSeatId(event.target);
+            if (!seatId) return;
+            setFocusedSeatId(seatId);
+            setCardSeatId(seatId);
+          }}
+          onBlur={() => setCardSeatId(null)}
+        >
+          <CabinRows
+            layout={layout}
+            renderRow={(rowNumber) => (
+              <SeatRow
+                rowNumber={rowNumber}
+                columnGroups={layout.columnGroups}
+                seatsByColumn={seatsByRow.get(rowNumber) ?? new Map()}
+                renderSeat={renderSeat}
+              />
+            )}
+          />
+        </div>
+      </CabinShell>
       {isScrollable && (
         <p className="pt-1 text-center text-xs text-ink-muted">
           Swipe or scroll sideways to see every column

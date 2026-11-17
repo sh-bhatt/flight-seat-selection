@@ -28,10 +28,11 @@ export const MAX_VISIBLE_TOASTS = 3;
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const VARIANT_MARKER: Record<ToastVariant, { glyph: string; className: string }> = {
-  success: { glyph: '✓', className: 'bg-success text-success-ink' },
-  info: { glyph: 'i', className: 'bg-accent text-accent-ink' },
-  error: { glyph: '!', className: 'bg-danger text-danger-ink' },
+/** Colored status dot per variant (the message itself stays navy). */
+const VARIANT_DOT: Record<ToastVariant, string> = {
+  success: 'bg-success',
+  info: 'bg-info',
+  error: 'bg-danger',
 };
 
 function ToastMessage({
@@ -46,15 +47,12 @@ function ToastMessage({
     return () => clearTimeout(timer);
   }, [toast.id, onDismiss]);
 
-  const marker = VARIANT_MARKER[toast.variant];
   return (
-    <div className="animate-toast-in pointer-events-auto flex max-w-[min(26rem,calc(100vw-2rem))] items-center gap-3 rounded-xl bg-toast px-4 py-3 text-sm font-medium text-toast-ink shadow-lg shadow-black/20">
+    <div className="animate-toast-in pointer-events-auto flex max-w-[min(26rem,calc(100vw-2rem))] items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-foreground shadow-[0_8px_24px_-8px_rgba(10,37,64,0.2)]">
       <span
         aria-hidden="true"
-        className={`flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${marker.className}`}
-      >
-        {marker.glyph}
-      </span>
+        className={`size-2.5 shrink-0 rounded-full ${VARIANT_DOT[toast.variant]}`}
+      />
       <span className="min-w-0 [overflow-wrap:anywhere]">{toast.message}</span>
     </div>
   );

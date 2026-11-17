@@ -9,12 +9,7 @@ import { useBooking, useBookingActions } from '@/context/BookingContext';
 import { MAX_PASSENGERS, MIN_PASSENGERS } from '@/state/bookingReducer';
 import { getSeatedPassengersRemovedBy } from '@/state/selectors';
 
-function getHelperText(count: number): string {
-  if (count >= MAX_PASSENGERS) return `Maximum of ${MAX_PASSENGERS} passengers`;
-  if (count <= MIN_PASSENGERS) return 'At least 1 passenger is required';
-  return `Choose ${MIN_PASSENGERS}–${MAX_PASSENGERS} passengers`;
-}
-
+/** Compact − / count / + stepper (1–6). Dropping seated passengers asks first. */
 export function PassengerCountSelector() {
   const state = useBooking();
   const { setPassengerCount } = useBookingActions();
@@ -42,39 +37,36 @@ export function PassengerCountSelector() {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <span id="passenger-count-label" className="text-sm font-semibold">
-          Passengers
-        </span>
-        <div
-          role="group"
-          aria-labelledby="passenger-count-label"
-          className="flex items-center rounded-xl border border-line bg-surface-sunken p-0.5"
+    <>
+      <div
+        role="group"
+        aria-label="Passengers"
+        className="flex items-center rounded-full bg-surface-sunken p-0.5"
+      >
+        <IconButton
+          size="lg"
+          label="Remove a passenger"
+          disabled={count <= MIN_PASSENGERS}
+          onClick={() => requestCount(count - 1)}
         >
-          <IconButton
-            label="Remove a passenger"
-            disabled={count <= MIN_PASSENGERS}
-            onClick={() => requestCount(count - 1)}
-          >
-            <MinusIcon />
-          </IconButton>
-          <output
-            aria-live="polite"
-            className="w-8 text-center text-base font-semibold tabular-nums"
-          >
-            {count}
-          </output>
-          <IconButton
-            label="Add a passenger"
-            disabled={count >= MAX_PASSENGERS}
-            onClick={() => requestCount(count + 1)}
-          >
-            <PlusIcon />
-          </IconButton>
-        </div>
+          <MinusIcon />
+        </IconButton>
+        <output
+          aria-live="polite"
+          className="w-7 text-center text-sm font-bold tabular-nums"
+        >
+          {count}
+        </output>
+        <IconButton
+          size="lg"
+          label="Add a passenger"
+          className="bg-surface shadow-[0_1px_2px_rgba(10,37,64,0.12)]"
+          disabled={count >= MAX_PASSENGERS}
+          onClick={() => requestCount(count + 1)}
+        >
+          <PlusIcon />
+        </IconButton>
       </div>
-      <p className="text-xs text-ink-muted">{getHelperText(count)}</p>
 
       <ConfirmDialog
         open={pendingCount !== null}
@@ -87,6 +79,6 @@ export function PassengerCountSelector() {
         {seatsLost === 1 ? 'passenger' : 'passengers'} and free{' '}
         {seatsLost === 1 ? 'their seat' : 'their seats'}.
       </ConfirmDialog>
-    </div>
+    </>
   );
 }

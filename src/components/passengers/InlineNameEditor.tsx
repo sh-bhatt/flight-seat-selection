@@ -57,7 +57,7 @@ export function InlineNameEditor({
         onKeyDown={handleKeyDown}
         onBlur={(event) => finish(true, event.currentTarget.value)}
         onClick={(event) => event.stopPropagation()}
-        className="h-8 min-w-0 rounded-md border-2 border-accent bg-surface px-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-accent/40"
+        className="h-8 min-w-0 rounded-md border-2 border-navy bg-surface px-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-navy/20"
       />
       <p
         id={hintId}

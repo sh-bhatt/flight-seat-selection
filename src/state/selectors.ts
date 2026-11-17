@@ -1,3 +1,4 @@
+import { LAYOUTS } from '@/data/layouts';
 import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
 import type { BookingState } from '@/state/bookingReducer';
 import type { MealOption, Passenger, Seat, SeatStatus } from '@/types';
@@ -211,4 +212,54 @@ export function getSelectedMealOptionId(
 /** True when there is anything to price: a seat or a meal. */
 export function hasPricedSelections(state: BookingState): boolean {
   return getAssignedCount(state) > 0 || getMealSummaryLines(state).length > 0;
+}
+
+export function getActivePassenger(state: BookingState): Passenger | undefined {
+  return state.passengers.find((p) => p.id === state.activePassengerId);
+}
+
+/** First passenger (in order) without a seat; drives the "Pick a seat for X" hint. */
+export function getFirstUnseatedPassenger(
+  state: BookingState,
+): Passenger | undefined {
+  return state.passengers.find((p) => p.seatId === null);
+}
+
+export interface PassengerSeatLine {
+  passengerId: string;
+  passengerName: string;
+  /** Undefined while the passenger has no seat. */
+  seat: Seat | undefined;
+}
+
+/** One line per passenger, seated or not, in passenger order. */
+export function getPassengerSeatLines(state: BookingState): PassengerSeatLine[] {
+  return state.passengers.map((passenger) => ({
+    passengerId: passenger.id,
+    passengerName: passenger.name,
+    seat: getPassengerSeat(state, passenger.id),
+  }));
+}
+
+/**
+ * Who sits right beside `seat` in the same block (left neighbour first), other
+ * than the person this seat is for: its owner, or the active passenger who
+ * would take it. Seats across an aisle never count.
+ */
+export function getAdjacentCompanion(
+  state: BookingState,
+  seat: Seat,
+): Passenger | undefined {
+  const group = LAYOUTS[state.layoutId].columnGroups.find((columns) =>
+    columns.includes(seat.column),
+  );
+  if (!group) return undefined;
+  const index = group.indexOf(seat.column);
+  const subject = getSeatOwner(state, seat.id) ?? getActivePassenger(state);
+  for (const column of [group[index - 1], group[index + 1]]) {
+    if (column === undefined) continue;
+    const neighbour = getSeatOwner(state, `${seat.row}${column}`);
+    if (neighbour && neighbour.id !== subject?.id) return neighbour;
+  }
+  return undefined;
 }

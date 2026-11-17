@@ -1,33 +1,37 @@
-import { AppHeader } from '@/components/layout/AppHeader';
+import { FlightStrip } from '@/components/layout/FlightStrip';
 import { MainArea } from '@/components/layout/MainArea';
+import { SiteHeader } from '@/components/layout/SiteHeader';
 import { PassengerPanel } from '@/components/passengers/PassengerPanel';
+import { ReviewDialog } from '@/components/summary/ReviewDialog';
 import { MobileSummaryBar } from '@/components/summary/MobileSummaryBar';
 import { SummarySidebar } from '@/components/summary/SummarySidebar';
 import { AppProviders } from '@/context/AppProviders';
 
+/** From 1200px the side panels stick while the seat map scrolls past. */
+const STICKY_PANEL =
+  'min-[1200px]:sticky min-[1200px]:top-6 min-[1200px]:max-h-[calc(100vh-48px)] min-[1200px]:overflow-y-auto';
+
 /**
- * Grid placement per breakpoint:
- * - lg+: passengers | tabs (seats / meals) | summary (3 columns, summary sticky)
- * - md:  passengers + summary stacked on the left, map on the right
- * - <md: single column; summary lives in the sticky bottom bar
+ * One wrapping flex row: travellers | seat area (takes the spare width) |
+ * booking summary. When it no longer fits the panels wrap under each other.
+ * The summary is replaced by a fixed bottom bar below `md`.
  */
 export default function Home() {
   return (
     <AppProviders>
-      <main className="mx-auto flex w-full max-w-[90rem] flex-col gap-5 px-4 pt-5 pb-[calc(var(--summary-bar-height)+1.5rem)] md:pb-8 lg:px-6">
-        <AppHeader />
-
-        <div className="grid min-w-0 items-start gap-5 md:grid-cols-[17rem_minmax(0,1fr)] lg:grid-cols-[17rem_minmax(0,1fr)_19rem]">
-          <div className="md:col-start-1 md:row-start-1">
-            <PassengerPanel />
-          </div>
-
-          <MainArea className="md:col-start-2 md:row-span-2 md:row-start-1 lg:row-span-1" />
-
-          <SummarySidebar className="md:col-start-1 md:row-start-2 lg:sticky lg:top-4 lg:col-start-3 lg:row-start-1 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto" />
-        </div>
+      <SiteHeader />
+      <FlightStrip />
+      <main className="mx-auto flex w-full max-w-[1360px] flex-wrap items-start gap-7 px-4 pt-5 pb-[calc(var(--summary-bar-height)+1.5rem)] md:px-8 md:pt-7 md:pb-14">
+        <PassengerPanel
+          className={`flex-[1_1_260px] md:max-w-[300px] ${STICKY_PANEL}`}
+        />
+        <MainArea className="flex-[999_1_520px]" />
+        <SummarySidebar
+          className={`flex-[1_1_280px] md:max-w-[330px] ${STICKY_PANEL}`}
+        />
       </main>
       <MobileSummaryBar />
+      <ReviewDialog />
     </AppProviders>
   );
 }

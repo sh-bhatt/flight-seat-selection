@@ -1,37 +1,30 @@
 'use client';
 
-import { PassengerCard } from '@/components/passengers/PassengerCard';
+import { PassengerRow } from '@/components/passengers/PassengerRow';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
-import { useMainView } from '@/context/ViewContext';
 import { resolvePassengerName } from '@/state/bookingReducer';
-import { getPassengerMeal, getPassengerSeat } from '@/state/selectors';
+import { getPassengerSeat } from '@/state/selectors';
 
 export function PassengerList() {
   const state = useBooking();
   const { setActivePassenger, renamePassenger, removeSeat } =
     useBookingActions();
   const { showToast } = useToast();
-  const { setView } = useMainView();
 
   return (
-    <ul aria-label="Passengers" className="flex flex-col gap-2">
+    <ul aria-label="Passengers" className="flex flex-col gap-1.5">
       {state.passengers.map((passenger, index) => (
-        <PassengerCard
+        <PassengerRow
           key={passenger.id}
           passenger={passenger}
           seat={getPassengerSeat(state, passenger.id)}
-          meal={getPassengerMeal(state, passenger.id)}
           isActive={passenger.id === state.activePassengerId}
           onSelect={setActivePassenger}
           onRename={(passengerId, rawName) => {
             const { notice } = resolvePassengerName(rawName, index);
             renamePassenger(passengerId, rawName);
             if (notice) showToast(notice, 'info');
-          }}
-          onEditMeal={(passengerId) => {
-            setActivePassenger(passengerId);
-            setView('meals');
           }}
           onRemoveSeat={(passengerId) => {
             const seatId = passenger.seatId;

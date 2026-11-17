@@ -37,6 +37,12 @@ export const CloseIcon = (props: IconProps) => (
   </Icon>
 );
 
+export const ArrowLeftIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </Icon>
+);
+
 export const MinusIcon = (props: IconProps) => (
   <Icon {...props}>
     <path d="M5 12h14" />
@@ -73,5 +79,14 @@ export const SeatIcon = (props: IconProps) => (
     <path d="M7 4h7a3 3 0 0 1 3 3v6H7Z" />
     <path d="M5 13h14v4a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" />
     <path d="M8 19v2M16 19v2" />
+  </Icon>
+);
+
+/** Brand mark: a circle with a swooping flight path. */
+export const LogoIcon = (props: IconProps) => (
+  <Icon strokeWidth={1.75} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M5.5 15.5c4.5-.5 9-3.5 13-8" />
+    <path d="M14.5 7.5h4v4" />
   </Icon>
 );

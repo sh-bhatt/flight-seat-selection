@@ -1,5 +1,6 @@
+import { useRef } from 'react';
 import { SeatFace } from '@/components/seat-map/SeatFace';
-import { SeatTooltip } from '@/components/seat-map/SeatDetails';
+import { SeatHoverCard } from '@/components/seat-map/SeatHoverCard';
 import { getSeatAriaLabel } from '@/components/seat-map/seatDisplay';
 import { getPassengerInitial } from '@/lib/passengerInitial';
 import type { Passenger, Seat as SeatModel, SeatStatus } from '@/types';
@@ -9,9 +10,13 @@ interface SeatProps {
   status: SeatStatus;
   /** Passenger holding this seat, if any. */
   owner?: Passenger;
+  /** Name of the passenger the next click is for (used by the hover card). */
+  activeName: string;
+  /** Another passenger seated right beside this seat; only looked up while the card shows. */
+  companionName?: string;
   /** Roving tabindex: only one seat in the grid is tabbable at a time. */
   tabIndex: 0 | -1;
-  showTooltip: boolean;
+  showCard: boolean;
   onSelect: (seatId: string) => void;
   onHover: (seatId: string | null) => void;
 }
@@ -20,15 +25,18 @@ export function Seat({
   seat,
   status,
   owner,
+  activeName,
+  companionName,
   tabIndex,
-  showTooltip,
+  showCard,
   onSelect,
   onHover,
 }: SeatProps) {
+  const anchorRef = useRef<HTMLDivElement>(null);
   const isOccupied = status === 'occupied';
-  const tooltipId = `seat-tip-${seat.id}`;
+  const cardId = `seat-tip-${seat.id}`;
   return (
-    <div className="relative">
+    <div ref={anchorRef} className="relative">
       {/* aria-disabled (not disabled) keeps occupied seats focusable and clickable for feedback. */}
       <button
         type="button"
@@ -37,7 +45,7 @@ export function Seat({
         aria-label={getSeatAriaLabel(seat, status, owner?.name)}
         aria-disabled={isOccupied}
         aria-pressed={status === 'selected-current'}
-        aria-describedby={showTooltip ? tooltipId : undefined}
+        aria-describedby={showCard ? cardId : undefined}
         onClick={(event) => {
           // A double-click would assign then immediately release the seat.
           // `detail` is the click count (0 for keyboard activation).
@@ -52,21 +60,24 @@ export function Seat({
           if (event.pointerType === 'mouse') onHover(seat.id);
         }}
         onPointerLeave={() => onHover(null)}
-        className={`group/seat block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${isOccupied ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        // The focus ring is drawn on the seat face (3px navy), not as an outline.
+        className={`group/seat block rounded-[10px] outline-none ${isOccupied ? 'cursor-not-allowed' : 'cursor-pointer'}`}
       >
         <SeatFace
           status={status}
           category={seat.category}
           initial={owner ? getPassengerInitial(owner.name) : undefined}
-          isFree={seat.price === 0}
         />
       </button>
-      {showTooltip && (
-        <SeatTooltip
-          id={tooltipId}
+      {showCard && (
+        <SeatHoverCard
+          id={cardId}
+          anchorRef={anchorRef}
           seat={seat}
           status={status}
+          activeName={activeName}
           ownerName={owner?.name}
+          companionName={companionName}
         />
       )}
     </div>

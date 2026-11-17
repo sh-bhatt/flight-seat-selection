@@ -1,46 +1,85 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { CabinRow } from '@/components/seat-map/CabinRow';
-import { ExitMarker } from '@/components/seat-map/ExitMarker';
+import { ExitRow } from '@/components/seat-map/ExitRow';
 import { EXIT_ROWS } from '@/data/cabin';
+import { useHorizontalOverflow } from '@/hooks/useHorizontalOverflow';
 import type { LayoutConfig } from '@/types';
 
+/** Room reserved on each side of the fuselage for a wing (px). */
+const WING_ROOM_PX = 96;
+
+function ServiceTag({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-md bg-surface-sunken px-2 py-1 text-[10px] leading-none font-semibold text-ink-muted">
+      {children}
+    </span>
+  );
+}
+
 /**
- * The fuselage: nose, "FRONT" label and the column-letter header. Shared by the
- * live seat map and its loading skeleton so both have exactly the same size.
+ * The aircraft drawing: a scroll box (room on both sides for the wings), the
+ * fuselage with cockpit windows, front galley / WC, the column-letter header
+ * and, after the rows, the rear galley / WC. Shared by the live seat map and
+ * its loading skeleton so both have exactly the same size.
  */
 export function CabinShell({
   layout,
   children,
+  scrollRef,
 }: {
   layout: LayoutConfig;
   children: ReactNode;
+  /** Lets the seat map watch whether the cabin scrolls sideways. */
+  scrollRef?: RefObject<HTMLDivElement | null>;
 }) {
+  const fallbackRef = useRef<HTMLDivElement>(null);
+  const boxRef = scrollRef ?? fallbackRef;
+  // Wings (and the room they need) only appear when they fit beside the fuselage.
+  const wingsFit = !useHorizontalOverflow(boxRef, WING_ROOM_PX * 2);
   return (
-    <div className="mx-auto w-fit rounded-t-[6rem] rounded-b-3xl border-2 border-line bg-surface px-3 pb-8 pt-4 shadow-sm sm:px-6">
-      <div aria-hidden="true" className="flex flex-col items-center gap-1 pb-5">
-        <span className="h-3 w-20 rounded-full bg-accent-soft" />
-        <span className="text-[10px] font-semibold tracking-[0.3em] text-ink-muted">
-          FRONT
-        </span>
+    <div
+      ref={boxRef}
+      data-wings={wingsFit ? 'on' : 'off'}
+      className={`group/cabin overflow-x-auto pb-3 ${wingsFit ? 'sm:px-24' : ''}`}
+    >
+      <div className="relative mx-auto w-fit rounded-[190px_190px_44px_44px/260px_260px_44px_44px] border-[1.5px] border-fuselage-line bg-surface px-3 pt-[54px] pb-[26px] [--inset:12px] shadow-[0_4px_16px_-6px_rgba(10,37,64,0.12)] sm:px-[30px] sm:[--inset:30px]">
+        <div
+          aria-hidden="true"
+          className="absolute top-5 left-1/2 flex -translate-x-1/2 gap-2"
+        >
+          <span className="h-1.5 w-8 rounded-full bg-cockpit" />
+          <span className="h-1.5 w-8 rounded-full bg-cockpit" />
+        </div>
+
+        <div aria-hidden="true" className="mt-5 mb-4 flex justify-between px-5">
+          <ServiceTag>Galley</ServiceTag>
+          <ServiceTag>WC</ServiceTag>
+        </div>
+
+        <CabinRow
+          decorative
+          label=""
+          columnGroups={layout.columnGroups}
+          renderCell={(column) => (
+            <span className="w-[38px] text-center text-xs font-bold text-ink-muted">
+              {column}
+            </span>
+          )}
+        />
+
+        {children}
+
+        <div aria-hidden="true" className="mt-5 flex justify-between px-1">
+          <ServiceTag>WC</ServiceTag>
+          <ServiceTag>Galley</ServiceTag>
+          <ServiceTag>WC</ServiceTag>
+        </div>
       </div>
-
-      <CabinRow
-        decorative
-        label=""
-        columnGroups={layout.columnGroups}
-        renderCell={(column) => (
-          <span className="w-9 text-center text-xs font-semibold text-ink-muted">
-            {column}
-          </span>
-        )}
-      />
-
-      {children}
     </div>
   );
 }
 
-/** Every row of the layout, with an EXIT strip above exit rows. */
+/** Every row of the layout, with an exit marker above exit rows. */
 export function CabinRows({
   layout,
   renderRow,
@@ -54,7 +93,9 @@ export function CabinRows({
         const rowNumber = index + 1;
         return (
           <div key={rowNumber} className="contents">
-            {EXIT_ROWS.includes(rowNumber) && <ExitMarker />}
+            {EXIT_ROWS.includes(rowNumber) && (
+              <ExitRow withWings={rowNumber === EXIT_ROWS[0]} />
+            )}
             {renderRow(rowNumber)}
           </div>
         );
