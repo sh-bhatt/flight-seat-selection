@@ -4,7 +4,8 @@
  */
 export function getPassengerInitial(name: string): string {
   const trimmed = name.trim();
-  const letter = trimmed.charAt(0).toUpperCase() || '?';
+  // Array.from keeps emoji and other surrogate pairs whole (charAt would split them).
+  const letter = (Array.from(trimmed)[0] ?? '?').toUpperCase();
   const trailingNumber = /\d{1,2}$/.exec(trimmed)?.[0] ?? '';
   return `${letter}${trailingNumber}`;
 }

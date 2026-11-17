@@ -1,5 +1,8 @@
 export type LayoutId = '3-2' | '2-3-2';
 
+/** Lifecycle of the (mock) seat map request for the current layout. */
+export type SeatMapStatus = 'loading' | 'ready' | 'error';
+
 export type SeatCategory = 'standard' | 'premium' | 'extra-legroom';
 
 /** Derived at read time from seats + passengers; never stored. */

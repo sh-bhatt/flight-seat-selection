@@ -29,9 +29,9 @@ export const MAX_VISIBLE_TOASTS = 3;
 const ToastContext = createContext<ToastApi | null>(null);
 
 const VARIANT_MARKER: Record<ToastVariant, { glyph: string; className: string }> = {
-  success: { glyph: '✓', className: 'bg-success' },
-  info: { glyph: 'i', className: 'bg-accent' },
-  error: { glyph: '!', className: 'bg-danger' },
+  success: { glyph: '✓', className: 'bg-success text-success-ink' },
+  info: { glyph: 'i', className: 'bg-accent text-accent-ink' },
+  error: { glyph: '!', className: 'bg-danger text-danger-ink' },
 };
 
 function ToastMessage({
@@ -51,11 +51,11 @@ function ToastMessage({
     <div className="animate-toast-in pointer-events-auto flex max-w-[min(26rem,calc(100vw-2rem))] items-center gap-3 rounded-xl bg-toast px-4 py-3 text-sm font-medium text-toast-ink shadow-lg shadow-black/20">
       <span
         aria-hidden="true"
-        className={`flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${marker.className}`}
+        className={`flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${marker.className}`}
       >
         {marker.glyph}
       </span>
-      <span>{toast.message}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{toast.message}</span>
     </div>
   );
 }
@@ -72,8 +72,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, variant: ToastVariant = 'info') => {
       const id = nextId.current;
       nextId.current += 1;
+      // A repeat of a message already on screen replaces it (fresh timer)
+      // instead of stacking, so rapid identical actions don't flood the stack.
       setToasts((current) =>
-        [...current, { id, message, variant }].slice(-MAX_VISIBLE_TOASTS),
+        [
+          ...current.filter((toast) => toast.message !== message),
+          { id, message, variant },
+        ].slice(-MAX_VISIBLE_TOASTS),
       );
     },
     [],

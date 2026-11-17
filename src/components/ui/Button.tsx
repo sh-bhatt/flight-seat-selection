@@ -10,7 +10,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-ink hover:brightness-110',
   secondary:
     'border border-line bg-surface text-foreground hover:bg-surface-sunken',
-  danger: 'bg-danger text-white hover:brightness-110',
+  danger: 'bg-danger text-danger-ink hover:brightness-110',
 };
 
 export function Button({

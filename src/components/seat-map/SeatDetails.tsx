@@ -25,7 +25,9 @@ function SeatDetails({ seat, status, ownerName }: SeatDetailsProps) {
       <p className="text-xs text-ink-muted">
         {CATEGORY_LABEL[seat.category]} · {POSITION_LABEL[seat.position]}
       </p>
-      <p className="text-xs font-medium capitalize">{statusLabel}</p>
+      <p className="text-xs font-medium first-letter:uppercase [overflow-wrap:anywhere]">
+        {statusLabel}
+      </p>
     </div>
   );
 }

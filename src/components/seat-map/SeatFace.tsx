@@ -19,9 +19,12 @@ const AVAILABLE_CLASSES: Record<SeatCategory, string> = {
 
 const STATUS_CLASSES: Record<Exclude<SeatStatus, 'available'>, string> = {
   occupied: 'border-seat-occupied bg-seat-occupied text-seat-occupied-ink',
+  // Both selected statuses carry the pop class, so it plays once when a seat
+  // becomes selected and not again when the active passenger changes.
   'selected-current':
-    'border-accent bg-accent text-accent-ink shadow-[0_0_0_3px_var(--accent-soft)]',
-  'selected-other': 'border-seat-other bg-seat-other text-seat-other-ink',
+    'animate-seat-pop border-accent bg-accent text-accent-ink shadow-[0_0_0_3px_var(--accent-soft)]',
+  'selected-other':
+    'animate-seat-pop border-seat-other bg-seat-other text-seat-other-ink',
 };
 
 /** Extra-legroom seats are drawn taller, a cue that does not rely on color. */

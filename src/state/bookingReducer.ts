@@ -2,7 +2,7 @@ import { MEAL_OPTIONS, NO_MEAL_ID } from '@/data/meals';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { generateSeatMap } from '@/lib/generateSeatMap';
 import { getSeatById, getSeatOwnerMap } from '@/state/selectors';
-import type { LayoutId, Passenger, Seat } from '@/types';
+import type { LayoutId, Passenger, Seat, SeatMapStatus } from '@/types';
 
 export const MIN_PASSENGERS = 1;
 export const MAX_PASSENGERS = 6;
@@ -10,7 +10,9 @@ export const MAX_NAME_LENGTH = 30;
 
 export interface BookingState {
   layoutId: LayoutId;
+  /** Empty until `seatMapStatus` is `ready`; filled by SEATS_LOADED. */
   seats: Seat[];
+  seatMapStatus: SeatMapStatus;
   passengers: Passenger[];
   activePassengerId: string | null;
   mealsEnabled: boolean;
@@ -21,6 +23,9 @@ export type BookingAction =
   | { type: 'SET_ACTIVE_PASSENGER'; passengerId: string }
   | { type: 'RENAME_PASSENGER'; passengerId: string; name: string }
   | { type: 'SET_LAYOUT'; layoutId: LayoutId }
+  | { type: 'SEATS_LOADED'; layoutId: LayoutId; seats: Seat[] }
+  | { type: 'SEATS_FAILED'; layoutId: LayoutId }
+  | { type: 'RETRY_SEATS' }
   | { type: 'SEAT_CLICKED'; seatId: string }
   | { type: 'REMOVE_SEAT'; passengerId: string }
   | { type: 'SELECT_MEAL'; passengerId: string; mealId: string | null }
@@ -28,6 +33,7 @@ export type BookingAction =
 
 export type SeatClickOutcomeType = 'assigned' | 'changed' | 'removed' | 'blocked';
 export type SeatClickBlockReason =
+  | 'seats-not-ready'
   | 'no-passenger'
   | 'occupied'
   | 'taken-by-other'
@@ -55,19 +61,42 @@ function createPassenger(index: number): Passenger {
   };
 }
 
-export function createInitialState(
-  layoutId: LayoutId = DEFAULT_LAYOUT,
-  passengerCount: number = MIN_PASSENGERS,
-): BookingState {
+function createBaseState(
+  layoutId: LayoutId,
+  passengerCount: number,
+): Omit<BookingState, 'seats' | 'seatMapStatus'> {
   const passengers = Array.from({ length: passengerCount }, (_, i) =>
     createPassenger(i),
   );
   return {
     layoutId,
-    seats: generateSeatMap(layoutId),
     passengers,
     activePassengerId: passengers[0]?.id ?? null,
     mealsEnabled: true,
+  };
+}
+
+/** What the app starts with: no seats yet, the seat map request is in flight. */
+export function createLoadingState(
+  layoutId: LayoutId = DEFAULT_LAYOUT,
+  passengerCount: number = MIN_PASSENGERS,
+): BookingState {
+  return {
+    ...createBaseState(layoutId, passengerCount),
+    seats: [],
+    seatMapStatus: 'loading',
+  };
+}
+
+/** A state whose seat map has already arrived (tests, and RESET on a loaded layout). */
+export function createInitialState(
+  layoutId: LayoutId = DEFAULT_LAYOUT,
+  passengerCount: number = MIN_PASSENGERS,
+): BookingState {
+  return {
+    ...createBaseState(layoutId, passengerCount),
+    seats: generateSeatMap(layoutId),
+    seatMapStatus: 'ready',
   };
 }
 
@@ -79,6 +108,13 @@ export function getSeatClickOutcome(
   state: BookingState,
   seatId: string,
 ): SeatClickOutcome {
+  if (state.seatMapStatus !== 'ready') {
+    return {
+      type: 'blocked',
+      reason: 'seats-not-ready',
+      message: 'The seat map is not available yet',
+    };
+  }
   const active = state.passengers.find((p) => p.id === state.activePassengerId);
   if (!active) {
     return {
@@ -190,16 +226,49 @@ function setPassengerCount(state: BookingState, rawCount: number): BookingState 
         ]
       : state.passengers.slice(0, count);
 
-  const activeStillExists = passengers.some(
+  const activePassenger = passengers.find(
     (p) => p.id === state.activePassengerId,
   );
-  return {
-    ...state,
-    passengers,
-    activePassengerId: activeStillExists
-      ? state.activePassengerId
-      : passengers[passengers.length - 1].id,
-  };
+  let activePassengerId: string;
+  if (!activePassenger) {
+    activePassengerId = passengers[passengers.length - 1].id;
+  } else if (count > state.passengers.length && activePassenger.seatId !== null) {
+    // Growing while the active passenger is already seated: hand over to the
+    // first new passenger so the next seat click seats them, not moves this one.
+    activePassengerId = passengers[state.passengers.length].id;
+  } else {
+    activePassengerId = activePassenger.id;
+  }
+  return { ...state, passengers, activePassengerId };
+}
+
+export interface ResolvedPassengerName {
+  name: string;
+  /** Explains a change the user did not type (empty or too long), else null. */
+  notice: string | null;
+}
+
+/**
+ * The one place that decides what a typed name becomes: trimmed, capped at
+ * `MAX_NAME_LENGTH`, and an empty name falls back to "Passenger N". The reducer
+ * applies `name`; the UI shows `notice` so the change is never silent.
+ */
+export function resolvePassengerName(
+  rawName: string,
+  passengerIndex: number,
+): ResolvedPassengerName {
+  const trimmed = rawName.trim();
+  if (trimmed === '') {
+    const name = defaultPassengerName(passengerIndex);
+    return { name, notice: `A name can't be empty, so it is now "${name}"` };
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return {
+      name: trimmed.slice(0, MAX_NAME_LENGTH).trim(),
+      notice: `Names are limited to ${MAX_NAME_LENGTH} characters, so it was shortened`,
+    };
+  }
+  return { name: trimmed, notice: null };
 }
 
 function renamePassenger(
@@ -209,9 +278,7 @@ function renamePassenger(
 ): BookingState {
   const index = state.passengers.findIndex((p) => p.id === passengerId);
   if (index === -1) return state;
-  const name =
-    rawName.trim().slice(0, MAX_NAME_LENGTH).trim() ||
-    defaultPassengerName(index);
+  const { name } = resolvePassengerName(rawName, index);
   return {
     ...state,
     passengers: updatePassenger(state.passengers, passengerId, { name }),
@@ -244,15 +311,57 @@ function selectMeal(
   };
 }
 
+/**
+ * The new layout's seats arrive asynchronously (SEATS_LOADED), so the old ones
+ * are dropped right away and the map shows its loading state meanwhile.
+ */
 function setLayout(state: BookingState, layoutId: LayoutId): BookingState {
   if (layoutId === state.layoutId) return state;
   return {
     ...state,
     layoutId,
-    seats: generateSeatMap(layoutId),
+    seats: [],
+    seatMapStatus: 'loading',
     // Seat ids differ between layouts, so old assignments are meaningless.
     passengers: state.passengers.map((p) => ({ ...p, seatId: null })),
   };
+}
+
+/**
+ * Responses are matched to the current layout and to a pending request, so a
+ * slow answer for a layout the user already left (or a duplicate) is ignored.
+ */
+function isAwaitingSeats(state: BookingState, layoutId: LayoutId): boolean {
+  return state.seatMapStatus === 'loading' && state.layoutId === layoutId;
+}
+
+function seatsLoaded(
+  state: BookingState,
+  layoutId: LayoutId,
+  seats: Seat[],
+): BookingState {
+  if (!isAwaitingSeats(state, layoutId)) return state;
+  return { ...state, seats, seatMapStatus: 'ready' };
+}
+
+function seatsFailed(state: BookingState, layoutId: LayoutId): BookingState {
+  if (!isAwaitingSeats(state, layoutId)) return state;
+  return { ...state, seats: [], seatMapStatus: 'error' };
+}
+
+function retrySeats(state: BookingState): BookingState {
+  if (state.seatMapStatus !== 'error') return state;
+  return { ...state, seatMapStatus: 'loading' };
+}
+
+/** Back to the start. A seat map that is already loaded for the default layout is kept. */
+function reset(state: BookingState): BookingState {
+  const fresh = createLoadingState();
+  const canReuseSeats =
+    state.seatMapStatus === 'ready' && state.layoutId === fresh.layoutId;
+  return canReuseSeats
+    ? { ...fresh, seats: state.seats, seatMapStatus: 'ready' }
+    : fresh;
 }
 
 /** Throws if a seat is shared, unknown, occupied, or a passenger is duplicated. */
@@ -298,6 +407,12 @@ function reduce(state: BookingState, action: BookingAction): BookingState {
       return renamePassenger(state, action.passengerId, action.name);
     case 'SET_LAYOUT':
       return setLayout(state, action.layoutId);
+    case 'SEATS_LOADED':
+      return seatsLoaded(state, action.layoutId, action.seats);
+    case 'SEATS_FAILED':
+      return seatsFailed(state, action.layoutId);
+    case 'RETRY_SEATS':
+      return retrySeats(state);
     case 'SEAT_CLICKED':
       return applySeatClick(state, action.seatId);
     case 'REMOVE_SEAT':
@@ -310,7 +425,7 @@ function reduce(state: BookingState, action: BookingAction): BookingState {
     case 'SELECT_MEAL':
       return selectMeal(state, action.passengerId, action.mealId);
     case 'RESET':
-      return createInitialState();
+      return reset(state);
   }
 }
 

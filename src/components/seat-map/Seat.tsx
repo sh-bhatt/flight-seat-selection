@@ -38,7 +38,16 @@ export function Seat({
         aria-disabled={isOccupied}
         aria-pressed={status === 'selected-current'}
         aria-describedby={showTooltip ? tooltipId : undefined}
-        onClick={() => onSelect(seat.id)}
+        onClick={(event) => {
+          // A double-click would assign then immediately release the seat.
+          // `detail` is the click count (0 for keyboard activation).
+          if (event.detail > 1) return;
+          onSelect(seat.id);
+        }}
+        onKeyDown={(event) => {
+          // Holding Enter fires click repeatedly, which would toggle the seat.
+          if (event.key === 'Enter' && event.repeat) event.preventDefault();
+        }}
         onPointerEnter={(event) => {
           if (event.pointerType === 'mouse') onHover(seat.id);
         }}

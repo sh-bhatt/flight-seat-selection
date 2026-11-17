@@ -20,6 +20,24 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Seat map loading and error states
+
+The seat map is fetched through a mock API (`src/data/mockApi.ts`, `fetchSeatMap(layoutId)`) with a 600 ms delay. A skeleton cabin is shown while it loads, on first load and every time the layout is switched.
+
+To see the error state, open the app with `?simulateError=1`:
+
+```
+http://localhost:3000/?simulateError=1
+```
+
+Every seat map request then fails and the map shows an error with a **Retry** button. Retry keeps failing while the parameter is in the URL; remove it (or use `?simulateError=0`) and reload to see a successful load. Switching layout while in the error state also tries again with the new layout.
+
+## Tests
+
+```bash
+npm test
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

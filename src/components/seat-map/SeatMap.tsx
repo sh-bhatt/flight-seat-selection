@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { CabinRow } from '@/components/seat-map/CabinRow';
-import { ExitMarker } from '@/components/seat-map/ExitMarker';
+import { CabinRows, CabinShell } from '@/components/seat-map/CabinShell';
 import { Seat } from '@/components/seat-map/Seat';
 import { SeatDetailsBar } from '@/components/seat-map/SeatDetails';
+import { SeatMapError } from '@/components/seat-map/SeatMapError';
+import { SeatMapSkeleton } from '@/components/seat-map/SeatMapSkeleton';
 import { SeatRow } from '@/components/seat-map/SeatRow';
 import { getOutcomeToastVariant } from '@/components/seat-map/seatDisplay';
 import {
@@ -14,14 +15,14 @@ import {
 } from '@/components/seat-map/seatNavigation';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useSeatClick } from '@/context/BookingContext';
-import { EXIT_ROWS } from '@/data/cabin';
 import { LAYOUTS } from '@/data/layouts';
+import { useHorizontalOverflow } from '@/hooks/useHorizontalOverflow';
 import {
   getSeatById,
   getSeatOwner,
   getSeatStatus,
 } from '@/state/selectors';
-import type { Seat as SeatModel } from '@/types';
+import type { Seat as SeatModel, SeatMapStatus } from '@/types';
 
 function groupSeatsByRow(
   seats: readonly SeatModel[],
@@ -44,6 +45,8 @@ function SeatMapContent() {
   const handleSeatClick = useSeatClick();
   const { showToast } = useToast();
   const gridRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isScrollable = useHorizontalOverflow(scrollRef);
 
   const layout = LAYOUTS[state.layoutId];
   const seatsByRow = useMemo(() => groupSeatsByRow(state.seats), [state.seats]);
@@ -91,56 +94,42 @@ function SeatMapContent() {
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
-      <div className="mx-auto w-fit rounded-t-[6rem] rounded-b-3xl border-2 border-line bg-surface px-3 pb-8 pt-4 shadow-sm sm:px-6">
-        <div aria-hidden="true" className="flex flex-col items-center gap-1 pb-5">
-          <span className="h-3 w-20 rounded-full bg-accent-soft" />
-          <span className="text-[10px] font-semibold tracking-[0.3em] text-ink-muted">
-            FRONT
-          </span>
-        </div>
-
-        <CabinRow
-          decorative
-          label=""
-          columnGroups={layout.columnGroups}
-          renderCell={(column) => (
-            <span className="w-9 text-center text-xs font-semibold text-ink-muted">
-              {column}
-            </span>
-          )}
-        />
-
-        <div
-          ref={gridRef}
-          role="grid"
-          aria-label={`Seat map, ${layout.label}`}
-          className="mt-2 flex flex-col gap-1.5"
-          onKeyDown={handleKeyDown}
-          onFocus={(event) => {
-            const seatId = readSeatId(event.target);
-            if (!seatId) return;
-            setFocusedSeatId(seatId);
-            setTooltipSeatId(seatId);
-          }}
-          onBlur={() => setTooltipSeatId(null)}
-        >
-          {Array.from({ length: layout.rows }, (_, index) => {
-            const rowNumber = index + 1;
-            return (
-              <div key={rowNumber} className="contents">
-                {EXIT_ROWS.includes(rowNumber) && <ExitMarker />}
+    <div>
+      <div ref={scrollRef} className="overflow-x-auto pb-2">
+        <CabinShell layout={layout}>
+          <div
+            ref={gridRef}
+            role="grid"
+            aria-label={`Seat map, ${layout.label}`}
+            className="mt-2 flex flex-col gap-1.5"
+            onKeyDown={handleKeyDown}
+            onFocus={(event) => {
+              const seatId = readSeatId(event.target);
+              if (!seatId) return;
+              setFocusedSeatId(seatId);
+              setTooltipSeatId(seatId);
+            }}
+            onBlur={() => setTooltipSeatId(null)}
+          >
+            <CabinRows
+              layout={layout}
+              renderRow={(rowNumber) => (
                 <SeatRow
                   rowNumber={rowNumber}
                   columnGroups={layout.columnGroups}
                   seatsByColumn={seatsByRow.get(rowNumber) ?? new Map()}
                   renderSeat={renderSeat}
                 />
-              </div>
-            );
-          })}
-        </div>
+              )}
+            />
+          </div>
+        </CabinShell>
       </div>
+      {isScrollable && (
+        <p className="pt-1 text-center text-xs text-ink-muted">
+          Swipe or scroll sideways to see every column
+        </p>
+      )}
 
       {tappedSeat && (
         <SeatDetailsBar
@@ -153,8 +142,38 @@ function SeatMapContent() {
   );
 }
 
-/** Remounts when the layout changes so focus/hover/tap state never points at a stale seat. */
-export function SeatMap() {
+interface SeatMapProps {
+  status: SeatMapStatus;
+  onRetry: () => void;
+}
+
+/**
+ * Skeleton while loading, error + Retry on failure, the cabin once ready. The
+ * wrapper stays mounted across all three so focus survives a Retry click, and
+ * the cabin remounts per layout so focus/hover/tap state never points at a
+ * stale seat.
+ */
+export function SeatMap({ status, onRetry }: SeatMapProps) {
   const { layoutId } = useBooking();
-  return <SeatMapContent key={layoutId} />;
+  const regionRef = useRef<HTMLDivElement>(null);
+
+  function retry() {
+    onRetry();
+    regionRef.current?.focus({ preventScroll: true });
+  }
+
+  return (
+    <div
+      ref={regionRef}
+      role="region"
+      aria-label="Seat map"
+      aria-busy={status === 'loading'}
+      tabIndex={-1}
+      className="min-w-0 outline-none"
+    >
+      {status === 'loading' && <SeatMapSkeleton layout={LAYOUTS[layoutId]} />}
+      {status === 'error' && <SeatMapError onRetry={retry} />}
+      {status === 'ready' && <SeatMapContent key={layoutId} />}
+    </div>
+  );
 }

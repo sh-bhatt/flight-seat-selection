@@ -4,6 +4,7 @@ import { PassengerCard } from '@/components/passengers/PassengerCard';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
 import { useMainView } from '@/context/ViewContext';
+import { resolvePassengerName } from '@/state/bookingReducer';
 import { getPassengerMeal, getPassengerSeat } from '@/state/selectors';
 
 export function PassengerList() {
@@ -15,7 +16,7 @@ export function PassengerList() {
 
   return (
     <ul aria-label="Passengers" className="flex flex-col gap-2">
-      {state.passengers.map((passenger) => (
+      {state.passengers.map((passenger, index) => (
         <PassengerCard
           key={passenger.id}
           passenger={passenger}
@@ -23,7 +24,11 @@ export function PassengerList() {
           meal={getPassengerMeal(state, passenger.id)}
           isActive={passenger.id === state.activePassengerId}
           onSelect={setActivePassenger}
-          onRename={renamePassenger}
+          onRename={(passengerId, rawName) => {
+            const { notice } = resolvePassengerName(rawName, index);
+            renamePassenger(passengerId, rawName);
+            if (notice) showToast(notice, 'info');
+          }}
           onEditMeal={(passengerId) => {
             setActivePassenger(passengerId);
             setView('meals');

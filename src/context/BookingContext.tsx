@@ -11,13 +11,13 @@ import {
 } from 'react';
 import {
   bookingReducer,
-  createInitialState,
+  createLoadingState,
   getSeatClickOutcome,
   type BookingAction,
   type BookingState,
   type SeatClickOutcome,
 } from '@/state/bookingReducer';
-import type { LayoutId } from '@/types';
+import type { LayoutId, Seat } from '@/types';
 
 const BookingStateContext = createContext<BookingState | null>(null);
 const BookingDispatchContext = createContext<Dispatch<BookingAction> | null>(
@@ -26,7 +26,7 @@ const BookingDispatchContext = createContext<Dispatch<BookingAction> | null>(
 
 export function BookingProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(bookingReducer, undefined, () =>
-    createInitialState(),
+    createLoadingState(),
   );
   return (
     <BookingDispatchContext.Provider value={dispatch}>
@@ -64,6 +64,11 @@ export function useBookingActions() {
         dispatch({ type: 'RENAME_PASSENGER', passengerId, name }),
       setLayout: (layoutId: LayoutId) =>
         dispatch({ type: 'SET_LAYOUT', layoutId }),
+      seatsLoaded: (layoutId: LayoutId, seats: Seat[]) =>
+        dispatch({ type: 'SEATS_LOADED', layoutId, seats }),
+      seatsFailed: (layoutId: LayoutId) =>
+        dispatch({ type: 'SEATS_FAILED', layoutId }),
+      retrySeats: () => dispatch({ type: 'RETRY_SEATS' }),
       removeSeat: (passengerId: string) =>
         dispatch({ type: 'REMOVE_SEAT', passengerId }),
       selectMeal: (passengerId: string, mealId: string | null) =>

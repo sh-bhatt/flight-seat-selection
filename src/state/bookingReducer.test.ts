@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   bookingReducer,
   createInitialState,
+  createLoadingState,
   getSeatClickOutcome,
+  resolvePassengerName,
   type BookingAction,
   type BookingState,
 } from '@/state/bookingReducer';
@@ -17,6 +19,7 @@ import {
   getUnassignedCount,
 } from '@/state/selectors';
 import { MEAL_OPTIONS as MEALS, NO_MEAL_ID } from '@/data/meals';
+import { generateSeatMap } from '@/lib/generateSeatMap';
 
 function run(state: BookingState, ...actions: BookingAction[]): BookingState {
   return actions.reduce(bookingReducer, state);
@@ -163,6 +166,31 @@ describe('SET_PASSENGER_COUNT', () => {
       withPassengers(3),
       { type: 'SET_ACTIVE_PASSENGER', passengerId: 'passenger-3' },
       { type: 'SET_PASSENGER_COUNT', count: 2 },
+    );
+    expect(state.activePassengerId).toBe('passenger-2');
+  });
+
+  it('growing while the active passenger has a seat activates the first new passenger', () => {
+    const seated = run(base, click(seatA)); // only passenger, seated, still active
+    expect(seated.activePassengerId).toBe('passenger-1');
+    const grown = run(seated, { type: 'SET_PASSENGER_COUNT', count: 3 });
+    expect(grown.activePassengerId).toBe('passenger-2');
+    // The next click seats the new passenger and leaves passenger 1 where they were.
+    const next = run(grown, click(seatB));
+    expect(next.passengers.map((p) => p.seatId)).toEqual([seatA, seatB, null]);
+  });
+
+  it('growing while the active passenger has no seat keeps them active', () => {
+    const grown = run(base, { type: 'SET_PASSENGER_COUNT', count: 3 });
+    expect(grown.activePassengerId).toBe('passenger-1');
+    expect(run(grown, click(seatA)).passengers[0].seatId).toBe(seatA);
+  });
+
+  it('growing keeps the active passenger when a different, unseated one is active', () => {
+    const state = run(
+      withPassengers(2),
+      click(seatA), // P1 seated, P2 active and unseated
+      { type: 'SET_PASSENGER_COUNT', count: 4 },
     );
     expect(state.activePassengerId).toBe('passenger-2');
   });
@@ -314,5 +342,174 @@ describe('invariants', () => {
     expect(() =>
       bookingReducer(corrupt, { type: 'SET_ACTIVE_PASSENGER', passengerId: 'passenger-1' }),
     ).toThrow(/multiple passengers/);
+  });
+});
+
+describe('async seat map (SEATS_LOADED / SEATS_FAILED / RETRY_SEATS)', () => {
+  const loaded = (layoutId: '3-2' | '2-3-2'): BookingAction => ({
+    type: 'SEATS_LOADED',
+    layoutId,
+    seats: generateSeatMap(layoutId),
+  });
+
+  it('the app starts loading with no seats', () => {
+    const state = createLoadingState();
+    expect(state.seatMapStatus).toBe('loading');
+    expect(state.seats).toEqual([]);
+    expect(state.passengers).toHaveLength(1);
+  });
+
+  it('SEATS_LOADED fills the seats and makes clicks work', () => {
+    const state = run(createLoadingState(), loaded('3-2'));
+    expect(state.seatMapStatus).toBe('ready');
+    expect(state.seats).toEqual(base.seats);
+    expect(run(state, click(seatA)).passengers[0].seatId).toBe(seatA);
+  });
+
+  it('blocks seat clicks until the seats are ready (same state object)', () => {
+    const loading = createLoadingState();
+    expect(getSeatClickOutcome(loading, seatA)).toMatchObject({
+      type: 'blocked',
+      reason: 'seats-not-ready',
+    });
+    expect(bookingReducer(loading, click(seatA))).toBe(loading);
+  });
+
+  it('ignores a response for a layout the user already left', () => {
+    const switched = run(base, { type: 'SET_LAYOUT', layoutId: '2-3-2' });
+    expect(bookingReducer(switched, loaded('3-2'))).toBe(switched);
+    expect(
+      bookingReducer(switched, { type: 'SEATS_FAILED', layoutId: '3-2' }),
+    ).toBe(switched);
+  });
+
+  it('ignores a duplicate response once the seats are ready', () => {
+    expect(bookingReducer(base, loaded('3-2'))).toBe(base);
+    expect(bookingReducer(base, { type: 'SEATS_FAILED', layoutId: '3-2' })).toBe(
+      base,
+    );
+  });
+
+  it('SEATS_FAILED -> error, RETRY_SEATS -> loading, then it can succeed', () => {
+    const failed = run(createLoadingState(), {
+      type: 'SEATS_FAILED',
+      layoutId: '3-2',
+    });
+    expect(failed.seatMapStatus).toBe('error');
+    expect(failed.seats).toEqual([]);
+    const retrying = run(failed, { type: 'RETRY_SEATS' });
+    expect(retrying.seatMapStatus).toBe('loading');
+    expect(run(retrying, loaded('3-2')).seatMapStatus).toBe('ready');
+  });
+
+  it('RETRY_SEATS only acts on an error', () => {
+    expect(bookingReducer(base, { type: 'RETRY_SEATS' })).toBe(base);
+    const loading = createLoadingState();
+    expect(bookingReducer(loading, { type: 'RETRY_SEATS' })).toBe(loading);
+  });
+
+  it('switching layout drops seats and assignments, then reloads', () => {
+    const seated = run(withPassengers(2), click(seatA), click(seatB));
+    const switched = run(seated, { type: 'SET_LAYOUT', layoutId: '2-3-2' });
+    expect(switched.seatMapStatus).toBe('loading');
+    expect(switched.seats).toEqual([]);
+    expect(switched.passengers.every((p) => p.seatId === null)).toBe(true);
+    const ready = run(switched, loaded('2-3-2'));
+    expect(ready.seats).toEqual(generateSeatMap('2-3-2'));
+    expect(ready.passengers).toHaveLength(2);
+  });
+
+  it('switching layout from the error state loads the new layout', () => {
+    const failed = run(createLoadingState(), {
+      type: 'SEATS_FAILED',
+      layoutId: '3-2',
+    });
+    expect(
+      run(failed, { type: 'SET_LAYOUT', layoutId: '2-3-2' }).seatMapStatus,
+    ).toBe('loading');
+  });
+
+  it('RESET keeps loaded default seats but reloads anything else', () => {
+    expect(run(base, { type: 'RESET' }).seatMapStatus).toBe('ready');
+    const wide = run(
+      base,
+      { type: 'SET_LAYOUT', layoutId: '2-3-2' },
+      loaded('2-3-2'),
+    );
+    const reset = run(wide, { type: 'RESET' });
+    expect(reset.layoutId).toBe('3-2');
+    expect(reset.seatMapStatus).toBe('loading');
+    expect(reset.seats).toEqual([]);
+    const failed = run(createLoadingState(), {
+      type: 'SEATS_FAILED',
+      layoutId: '3-2',
+    });
+    expect(run(failed, { type: 'RESET' }).seatMapStatus).toBe('loading');
+  });
+
+  it('meals and passenger names survive a layout switch', () => {
+    const state = run(
+      base,
+      { type: 'SELECT_MEAL', passengerId: 'passenger-1', mealId: 'jain-meal' },
+      { type: 'RENAME_PASSENGER', passengerId: 'passenger-1', name: 'Asha' },
+      { type: 'SET_LAYOUT', layoutId: '2-3-2' },
+    );
+    expect(state.passengers[0]).toMatchObject({
+      name: 'Asha',
+      mealId: 'jain-meal',
+    });
+  });
+});
+
+describe('edge cases', () => {
+  it('everyone seated: re-seating stays on the same passenger without errors', () => {
+    const seated = run(withPassengers(2), click(seatA), click(seatB));
+    expect(seated.activePassengerId).toBe('passenger-2');
+    const moved = run(seated, click(seatC)); // P2 changes seat
+    expect(moved.activePassengerId).toBe('passenger-2');
+    expect(getUnassignedCount(moved)).toBe(0);
+    const released = run(moved, click(seatC)); // P2 toggles their seat off
+    expect(released.activePassengerId).toBe('passenger-2');
+    expect(getUnassignedCount(released)).toBe(1);
+  });
+
+  it('repeating the same click toggles the seat (the UI ignores double-clicks)', () => {
+    const twice = run(base, click(seatA), click(seatA));
+    expect(twice.passengers[0].seatId).toBeNull();
+  });
+
+  it('shrinking below the active passenger keeps state valid', () => {
+    const state = run(
+      withPassengers(4),
+      click(seatA),
+      click(seatB),
+      click(seatC),
+      { type: 'SET_ACTIVE_PASSENGER', passengerId: 'passenger-4' },
+      { type: 'SET_PASSENGER_COUNT', count: 1 },
+    );
+    expect(state.passengers).toHaveLength(1);
+    expect(state.activePassengerId).toBe('passenger-1');
+    expect(state.passengers[0].seatId).toBe(seatA);
+  });
+});
+
+describe('resolvePassengerName', () => {
+  it('returns the trimmed name with no notice when it is fine', () => {
+    expect(resolvePassengerName('  Asha ', 0)).toEqual({
+      name: 'Asha',
+      notice: null,
+    });
+  });
+
+  it('explains the default used for an empty name', () => {
+    const { name, notice } = resolvePassengerName('   ', 2);
+    expect(name).toBe('Passenger 3');
+    expect(notice).toContain('Passenger 3');
+  });
+
+  it('explains when a long name is shortened to 30 characters', () => {
+    const { name, notice } = resolvePassengerName('x'.repeat(80), 0);
+    expect(name).toHaveLength(30);
+    expect(notice).toContain('30');
   });
 });

@@ -6,10 +6,13 @@ import { LayoutToggle } from '@/components/seat-map/LayoutToggle';
 import { SeatLegend } from '@/components/seat-map/SeatLegend';
 import { SeatMap } from '@/components/seat-map/SeatMap';
 import { useMainView } from '@/context/ViewContext';
+import { useSeatMap } from '@/hooks/useSeatMap';
 
 /** Tab switcher plus the active panel (seat map or meal picker). */
 export function MainArea({ className = '' }: { className?: string }) {
   const { view } = useMainView();
+  // Called here (not in SeatMap) so loading continues while the Meals tab is open.
+  const seatMap = useSeatMap();
 
   return (
     <section
@@ -30,7 +33,7 @@ export function MainArea({ className = '' }: { className?: string }) {
               <LayoutToggle />
             </div>
             <SeatLegend />
-            <SeatMap />
+            <SeatMap status={seatMap.status} onRetry={seatMap.retry} />
           </>
         ) : (
           <MealSelector />

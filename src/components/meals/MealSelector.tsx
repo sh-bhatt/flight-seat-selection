@@ -20,7 +20,7 @@ export function MealSelector() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold">
+      <h2 className="text-base font-semibold [overflow-wrap:anywhere]">
         Choose a meal for {passenger.name}
       </h2>
       <ul

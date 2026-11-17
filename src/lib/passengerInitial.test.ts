@@ -13,4 +13,8 @@ describe('getPassengerInitial', () => {
   it('falls back for blank names', () => {
     expect(getPassengerInitial('  ')).toBe('?');
   });
+
+  it('keeps an emoji whole instead of splitting the surrogate pair', () => {
+    expect(getPassengerInitial('\u{1F600} Sam')).toBe('\u{1F600}');
+  });
 });

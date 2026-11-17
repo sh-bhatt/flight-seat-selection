@@ -6,7 +6,7 @@ Personal learning doc: written so I can explain this project in an interview. Up
 
 A single-page app where a user picks an aircraft layout (3-2 or 2-3-2), views a seat map, adds passengers, assigns each passenger a seat (priced by category), optionally picks meals, and sees a running price summary. All data is mock and deterministic; there is no backend.
 
-Status: **seat selection, passenger panel, price summary and meal selection done** (types, layouts, pricing, seat generation, reducer, selectors, context, seat map, passenger panel, summary, Seats / Meals tabs, meal picker).
+Status: **seat selection, passenger panel, price summary, meal selection and the UX polish pass done** (types, layouts, pricing, seat generation, reducer, selectors, context, seat map, passenger panel, summary, Seats / Meals tabs, meal picker, async seat map with skeleton / error / retry, edge-case handling, accessibility and motion).
 
 ## 2. Tech stack & why
 
@@ -31,25 +31,33 @@ src/
     flight.ts                 Mock route shown in the header (DEL → BOM · 6E 2134 · Fri, 21 Nov)
     seatPricing.ts            Category prices, pricing rules, overrides, deterministic occupancy
     meals.ts                  MEAL_OPTIONS (6 items, free + paid, veg / non-veg) and NO_MEAL_ID
-    mockApi.ts                Fake async fetch (stub, TBD)
+    mockApi.ts                fetchSeatMap(layoutId): 600 ms fake request; rejects when the URL has ?simulateError=1 (+ test)
   lib/
     generateSeatMap.ts        Builds Seat[] from a layout
     formatCurrency.ts         INR formatting ("₹1,250", "Free")
     passengerInitial.ts       Seat label from a name ("Rahul" -> "R", "Passenger 2" -> "P2") (+ test)
   state/
     bookingReducer.ts         State, actions, getSeatClickOutcome, reducer, invariant check
-    bookingReducer.test.ts    Vitest unit tests for the rules and totals
+    bookingReducer.test.ts    Vitest unit tests for the rules, totals, async seat map and edge cases
     selectors.ts              Pure derived data (status, owner, totals, breakdown)
+  hooks/
+    useSeatMap.ts             Loads the seat map for the current layout via fetchSeatMap; dispatches SEATS_LOADED / SEATS_FAILED
+    useAnimatedNumber.ts      Eases a number toward its target (no animation with reduced motion)
+    usePrefersReducedMotion.ts  Live `prefers-reduced-motion` flag (useSyncExternalStore)
+    useHorizontalOverflow.ts  True while an element scrolls sideways (drives the "swipe sideways" hint)
   context/
     BookingContext.tsx        Provider + useBooking / useBookingActions / useSeatClick
     ViewContext.tsx           UI-only active tab (`seats` | `meals`): ViewProvider + useMainView
     AppProviders.tsx          Composes ToastProvider + BookingProvider + ViewProvider
   components/
     seat-map/
-      SeatMap.tsx             Cabin shell: nose, column header, grid, EXIT marker, keyboard nav, click + toast
+      SeatMap.tsx             Picks skeleton / error / cabin from the seat map status; cabin = grid, keyboard nav, click + toast, sideways-scroll hint
+      CabinShell.tsx          Fuselage (nose, column header) + CabinRows (rows with EXIT markers); shared by cabin and skeleton
+      SeatMapSkeleton.tsx     Grey placeholder cabin with the same footprint while loading
+      SeatMapError.tsx        Error message + Retry button (role=alert)
       SeatRow.tsx             One seat row (thin wrapper over CabinRow)
       CabinRow.tsx            Generic row: label, seat groups, aisle gaps, label (also used for the header)
-      Seat.tsx                Seat <button> with aria-label, tooltip, roving tabindex
+      Seat.tsx                Seat <button> with aria-label, tooltip, roving tabindex; ignores double-clicks and held Enter
       SeatFace.tsx            Painted seat (state + category styling); shared with the legend
       SeatDetails.tsx         SeatTooltip (desktop hover/focus) and SeatDetailsBar (mobile bottom bar)
       ExitMarker.tsx          Dashed "EXIT" strip above exit rows
@@ -87,13 +95,15 @@ src/
       Modal.tsx               Native <dialog> base; `dialog` and bottom `sheet` variants
       ConfirmDialog.tsx       Confirm/cancel modal built on Modal
       Tooltip.tsx             CSS-only tooltip on hover and keyboard focus
-      Toast.tsx               ToastProvider + useToast (3s auto-dismiss, max 3, aria-live)
-  app/                        page.tsx composes the page; layout.tsx holds metadata + fonts
+      Toast.tsx               ToastProvider + useToast (3s auto-dismiss, max 3, repeats replace, slide-in, aria-live)
+      AnimatedAmount.tsx      A price that counts to its new value; screen readers get only the final amount
+  app/                        page.tsx composes the page; layout.tsx holds metadata + fonts; globals.css holds color tokens, focus ring and all motion (reduced-motion aware)
 ```
 
 ## 4. Data model
 
 - **LayoutId** — `'3-2' | '2-3-2'`; the supported cabin configurations.
+- **SeatMapStatus** — `'loading' | 'ready' | 'error'`; where the seat map request for the current layout stands.
 - **SeatCategory** — `'standard' | 'premium' | 'extra-legroom'`; drives price.
 - **SeatStatus** — `'available' | 'occupied' | 'selected-current' | 'selected-other'`. *Derived*, never stored: computed from `Seat.isOccupied` plus which passenger holds the seat, so it can't go out of sync.
 - **SeatPosition** — `'window' | 'middle' | 'aisle'`; used by pricing rules.
@@ -106,13 +116,13 @@ src/
 
 One `useReducer` in `BookingProvider` (`src/context/BookingContext.tsx`). No external state library. All business rules live in `src/state/`; components only dispatch actions and read selectors.
 
-**State** (`BookingState`): `{ layoutId, seats, passengers, activePassengerId, mealsEnabled }`. Seat ownership is stored **only** on `Passenger.seatId`; everything else (seat status, owner, totals) is derived.
+**State** (`BookingState`): `{ layoutId, seats, seatMapStatus, passengers, activePassengerId, mealsEnabled }`. Seat ownership is stored **only** on `Passenger.seatId`; everything else (seat status, owner, totals) is derived. `seats` is empty until `seatMapStatus` is `ready`. The app starts from `createLoadingState()`; `createInitialState()` is a state whose seats have already arrived (used by tests and by RESET on a loaded default layout).
 
-**Actions** (discriminated union `BookingAction`): `SET_PASSENGER_COUNT`, `SET_ACTIVE_PASSENGER`, `RENAME_PASSENGER`, `SET_LAYOUT`, `SEAT_CLICKED`, `REMOVE_SEAT`, `SELECT_MEAL`, `RESET`.
+**Actions** (discriminated union `BookingAction`): `SET_PASSENGER_COUNT`, `SET_ACTIVE_PASSENGER`, `RENAME_PASSENGER`, `SET_LAYOUT`, `SEATS_LOADED`, `SEATS_FAILED`, `RETRY_SEATS`, `SEAT_CLICKED`, `REMOVE_SEAT`, `SELECT_MEAL`, `RESET`.
 
 **Context split**: state and dispatch are in two contexts, so components that only dispatch don't re-render on state changes. Hooks:
 - `useBooking()` → current state.
-- `useBookingActions()` → stable action creators (`setPassengerCount`, `setLayout`, `selectMeal`, ...).
+- `useBookingActions()` → stable action creators (`setPassengerCount`, `setLayout`, `selectMeal`, `seatsLoaded`, `seatsFailed`, `retrySeats`, ...).
 - `useSeatClick()` → `(seatId) => SeatClickOutcome`; dispatches `SEAT_CLICKED` and returns what happened for the toast.
 
 **One rule engine for clicks.** `getSeatClickOutcome(state, seatId)` is a pure function that decides what a click means. The reducer calls it to decide whether/how to change state; the UI calls the same function to build the toast message. The rules exist in exactly one place.
@@ -147,6 +157,20 @@ One `useReducer` in `BookingProvider` (`src/context/BookingContext.tsx`). No ext
           React re-renders subscribed components
 ```
 
+**Async seat map.** Seats arrive after a fake network call, so the reducer models the request lifecycle instead of the component:
+
+```
+ first render / SET_LAYOUT / RETRY_SEATS  -> seatMapStatus = 'loading' (seats = [], seatIds cleared on a layout change)
+ useSeatMap effect (status === 'loading') -> fetchSeatMap(layoutId)
+     resolves -> SEATS_LOADED { layoutId, seats } -> 'ready'
+     rejects  -> SEATS_FAILED { layoutId }        -> 'error'  (Retry -> RETRY_SEATS -> 'loading')
+ stale answers are dropped twice:
+     the effect cleanup ignores a request that was replaced,
+     the reducer ignores SEATS_LOADED / SEATS_FAILED unless status === 'loading' AND layoutId === state.layoutId
+```
+
+Seat clicks while the map is not `ready` are blocked (`seats-not-ready`), so no rule needed to change for the async arrival; the existing rules a–f run unchanged once seats exist.
+
 **Invariant:** no seat id appears on two passengers, and each passenger has at most one seat (a single `seatId` field makes the second part structural). `assertBookingInvariants` runs after every reducer call when `NODE_ENV !== 'production'` and throws on violation (also checks the seat exists, is not occupied, and the active passenger exists).
 
 ## 6. Components
@@ -159,10 +183,13 @@ All under `src/components/`. Business rules never live here: components call sel
 
 | Component | File | Responsibility | Props |
 |---|---|---|---|
-| `SeatMap` | `seat-map/SeatMap.tsx` | Renders the cabin for any `LayoutConfig`: nose, column letters, rows with numbers on both sides, aisles, EXIT marker. Owns roving focus, tooltip and tapped-seat state; handles clicks (outcome → toast). Remounts per layout. | none (reads context) |
+| `SeatMap` | `seat-map/SeatMap.tsx` | Persistent `role=region` wrapper that shows the skeleton, the error or the cabin depending on `status`. The cabin renders any `LayoutConfig`, owns roving focus, tooltip and tapped-seat state, handles clicks (outcome → toast), remounts per layout and shows a "swipe sideways" hint when it overflows. Retry moves focus to the wrapper so keyboard users are not dropped | `status, onRetry` |
+| `CabinShell` / `CabinRows` | `seat-map/CabinShell.tsx` | Fuselage (nose, column letters) and the row list with EXIT strips, shared by the cabin and the skeleton so they stay the same size | `layout, children` / `layout, renderRow` |
+| `SeatMapSkeleton` | `seat-map/SeatMapSkeleton.tsx` | Grey seats in the real grid while loading; visually hidden "Loading the … seat map" status text | `layout` |
+| `SeatMapError` | `seat-map/SeatMapError.tsx` | `role=alert` card with message and Retry | `onRetry` |
 | `SeatRow` | `seat-map/SeatRow.tsx` | One row, maps columns to seats | `rowNumber, columnGroups, seatsByColumn, renderSeat` |
 | `CabinRow` | `seat-map/CabinRow.tsx` | Label + seat groups + aisle gaps + label; reused for the header row so columns align | `label, columnGroups, renderCell, decorative?` |
-| `Seat` | `seat-map/Seat.tsx` | Accessible `<button>` (`aria-label` "Seat 12C, Premium, ₹250, available"), `aria-disabled` when occupied so it still gives feedback | `seat, status, owner?, tabIndex, showTooltip, onSelect, onHover` |
+| `Seat` | `seat-map/Seat.tsx` | Accessible `<button>` (`aria-label` "Seat 12C, Premium, ₹250, available"), `aria-disabled` when occupied so it still gives feedback. Ignores the second click of a double-click (`event.detail > 1`) and held-Enter repeats | `seat, status, owner?, tabIndex, showTooltip, onSelect, onHover` |
 | `SeatFace` | `seat-map/SeatFace.tsx` | Visual of a seat per status and category; also used in the legend (`neutral` drops the category tint and free dot for status swatches) | `status, category, initial?, isFree?, neutral?` |
 | `SeatTooltip` / `SeatDetailsBar` | `seat-map/SeatDetails.tsx` | Seat id, category, position, price, owner. Tooltip on desktop hover/focus; fixed bottom bar for the last tapped seat on mobile | `seat, status, ownerName?` (+ `id` for the tooltip) |
 | `ExitMarker` | `seat-map/ExitMarker.tsx` | Decorative EXIT strip above rows listed in `EXIT_ROWS` | none |
@@ -172,7 +199,7 @@ All under `src/components/`. Business rules never live here: components call sel
 | `PassengerPanel` | `passengers/PassengerPanel.tsx` | Groups selector, progress and the switcher; shows cards from `md`, chips below (CSS only) | none |
 | `PassengerCountSelector` | `passengers/PassengerCountSelector.tsx` | Stepper 1–6; buttons `disabled` at the limits; helper text changes at the limits. If `getSeatedPassengersRemovedBy` > 0 a `ConfirmDialog` asks first | none |
 | `PassengerProgress` | `passengers/PassengerProgress.tsx` | "2 of 3 passengers seated" + `role="progressbar"` | none |
-| `PassengerList` / `PassengerCard` | `passengers/` | One card per passenger. Active card: accent border + `aria-current`, and its name button has `aria-pressed`. The whole card is clickable. Pencil edits the name inline, ✕ removes the seat, "Meal" makes them active and switches to the Meals tab. The card shows "Meal: name · price" or "Meal: None" | card: `passenger, seat, meal, isActive, onSelect, onRename, onRemoveSeat, onEditMeal` |
+| `PassengerList` / `PassengerCard` | `passengers/` | One card per passenger. Active card: accent border + `aria-current`, and its name button has `aria-pressed`. The whole card is clickable. Pencil edits the name inline (live counter near the 30-character limit; an empty or shortened name explains itself in a toast), ✕ removes the seat, "Meal" makes them active and switches to the Meals tab. The card shows "Meal: name · price" or "Meal: None" | card: `passenger, seat, meal, isActive, onSelect, onRename, onRemoveSeat, onEditMeal` |
 | `MainArea` / `MainTabs` | `layout/` | Seats / Meals tab switcher above the main area. Seats panel = title, layout toggle, legend, map. Meals panel = `MealSelector`. Passenger panel and summary stay visible in both | `MainArea`: `className?` |
 | `MealSelector` / `MealCard` / `DietIndicator` | `meals/` | Cards for the active passenger (`aria-pressed`); clicking dispatches `SELECT_MEAL`; the reducer toggles. Veg/non-veg shown as the Indian green/red mark (with an aria-label) | card: `meal, isSelected, onSelect` |
 | `PassengerChips` | `passengers/PassengerChips.tsx` | Mobile chips (name + seat badge), `aria-pressed` on the active one | none |
@@ -185,7 +212,12 @@ All under `src/components/`. Business rules never live here: components call sel
 | `Modal` | `ui/Modal.tsx` | Native `<dialog>.showModal()`: focus trap, inert background, Esc and focus restore. `sheet` variant docks to the bottom | `open, title, children, onClose, variant?` |
 | `ConfirmDialog` | `ui/ConfirmDialog.tsx` | Confirm/cancel on top of `Modal`; Cancel is autofocused | `open, title, children, confirmLabel?, cancelLabel?, onConfirm, onCancel` |
 | `Tooltip` | `ui/Tooltip.tsx` | Hover + focus-within tooltip; passes an id for `aria-describedby` | `content, children(describedBy)` |
-| `ToastProvider` / `useToast` | `ui/Toast.tsx` | `showToast(message, variant?)`; 3 s auto-dismiss, max 3 stacked, `aria-live="polite"` region | provider takes `children` |
+| `ToastProvider` / `useToast` | `ui/Toast.tsx` | `showToast(message, variant?)`; 3 s auto-dismiss, max 3 stacked, a repeated message replaces the one on screen, slide-in animation, long names wrap (`overflow-wrap:anywhere`), `aria-live="polite"` region | provider takes `children` |
+| `AnimatedAmount` | `ui/AnimatedAmount.tsx` | Counts to the new price (`useAnimatedNumber`); the digits are `aria-hidden` and a visually hidden span carries the final amount. Used for the subtotals / grand total and the mobile bar | `amount` |
+
+**Accessibility.** Every focusable element gets a visible 2 px accent ring (a zero-specificity `:where(...):focus-visible` fallback in `globals.css`, plus per-component classes). Text and key graphics meet WCAG AA: the muted ink, occupied ✕, seat outlines (3:1 against the cabin) and the text on success / danger / accent fills were darkened or given an ink token (`--success-ink`, `--danger-ink`, `--accent-ink`) so dark mode also passes. The loading skeleton is `aria-busy` with a status message, the error is `role=alert`, the seat map is a labelled region, the mobile bar is a labelled region, layout buttons have explicit labels, and the animated total exposes only its final value to screen readers.
+
+**Motion.** All animation lives in `globals.css` inside `@media (prefers-reduced-motion: no-preference)`: seat select pop (`seat-pop`, on both selected statuses so it plays when a seat becomes selected and not when the active passenger changes), toast slide-in, skeleton pulse. A blanket `reduce` rule also shortens transitions. The total counting animation is JS, so `useAnimatedNumber` checks `usePrefersReducedMotion` and jumps straight to the value.
 
 **Keyboard.** Roving tabindex: one seat is in the Tab order. Arrow keys move through the grid (aisles skipped), Home/End jump to row ends, Enter/Space select. Pure logic in `seatNavigation.ts`.
 
@@ -207,6 +239,17 @@ State flow: see the diagram in section 5. Seat generation: `generateSeatMap(layo
    -> re-render: getSeatStatus / getSeatOwner per seat -> SeatFace
 ```
 
+**Seat map loading**
+
+```
+ first render (SSR + hydration) -> createLoadingState(): seats [], status 'loading' -> SeatMapSkeleton
+ MainArea calls useSeatMap() (always mounted, so switching to the Meals tab does not stop the request)
+   effect runs while status === 'loading' -> fetchSeatMap(layoutId)   (600 ms; fails if ?simulateError=1)
+     ok   -> SEATS_LOADED -> status 'ready' -> SeatMap renders the cabin (key = layoutId)
+     fail -> SEATS_FAILED -> status 'error' -> SeatMapError ("Retry")
+   Retry -> RETRY_SEATS -> 'loading' -> skeleton -> request again
+```
+
 **Layout switch**
 
 ```
@@ -214,8 +257,10 @@ State flow: see the diagram in section 5. Seat generation: `generateSeatMap(layo
    -> same layout? ignore
    -> getAssignedCount(state) > 0 ? open ConfirmDialog ("will clear N seat selections")
                                   : switch immediately
-   -> confirm -> setLayout() -> SET_LAYOUT (reducer regenerates seats, clears seatIds) -> toast
-   -> SeatMap remounts (key = layoutId), resetting focus/tooltip state
+   -> confirm -> setLayout() -> SET_LAYOUT (seats dropped, status 'loading', seatIds cleared)
+   -> toast "Switched to 2–3–2 layout · N seat selections cleared"
+   -> skeleton for the new layout -> useSeatMap fetches -> SEATS_LOADED -> cabin
+   -> switching again before it answers: the old request is ignored (cleanup + layout check in the reducer)
 ```
 
 **Page layout (`src/app/page.tsx`)**
@@ -295,6 +340,13 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 | `createInitialState` | `src/state/bookingReducer.ts` | `(layoutId?, count?) → BookingState` | Deterministic start state (3-2 layout, 1 passenger, ids `passenger-N`). |
 | `getSeatClickOutcome` | `src/state/bookingReducer.ts` | `(state, seatId) → { type, reason?, message }` | Single source of truth for click rules; used by reducer and UI toast. |
 | `assertBookingInvariants` | `src/state/bookingReducer.ts` | `state → void` (throws) | Dev guard: no shared seats, valid seats, valid active passenger. |
+| `createLoadingState` | `src/state/bookingReducer.ts` | `(layoutId?, count?) → BookingState` | The app's start state: no seats yet, `seatMapStatus: 'loading'`. |
+| `resolvePassengerName` | `src/state/bookingReducer.ts` | `(rawName, index) → { name, notice }` | Single rule for what a typed name becomes (trim, 30 chars, empty → "Passenger N"); the reducer uses `name`, the UI toasts `notice`. |
+| `fetchSeatMap` | `src/data/mockApi.ts` | `LayoutId → Promise<Seat[]>` | Fake request: 600 ms, resolves with `generateSeatMap`, rejects when the URL has `?simulateError=1`. |
+| `useSeatMap` | `src/hooks/useSeatMap.ts` | `() → { status, retry }` | Runs the request while status is `loading` and feeds `SEATS_LOADED` / `SEATS_FAILED` into the reducer. |
+| `useAnimatedNumber` | `src/hooks/useAnimatedNumber.ts` | `(target, durationMs?) → number` | requestAnimationFrame easing toward `target`; returns `target` itself on first render and with reduced motion. |
+| `usePrefersReducedMotion` | `src/hooks/usePrefersReducedMotion.ts` | `() → boolean` | Live media query via `useSyncExternalStore` (server snapshot `false`, so no hydration mismatch). |
+| `useHorizontalOverflow` | `src/hooks/useHorizontalOverflow.ts` | `ref → boolean` | ResizeObserver check that the map scrolls sideways. |
 | `findNextUnseatedId` (private) | `src/state/bookingReducer.ts` | passengers, fromId → id or null | Auto-advance: next passenger in order (wrapping) with no seat. |
 | `getSeatOwnerMap` | `src/state/selectors.ts` | `Passenger[] → Map<seatId, passengerId>` | O(1) owner lookups; cached per passengers array in a `WeakMap`. |
 | `getSeatStatus` | `src/state/selectors.ts` | state, seat → `SeatStatus` | Derives occupied / available / selected-current / selected-other. |
@@ -328,6 +380,7 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 - `formatCurrency(0)` → "Free"; `formatCurrency(0, { forceZero: true })` → "₹0".
 - Seat status is derived, not stored.
 - Seat clicks (`SEAT_CLICKED`), evaluated in this order:
+  - 0) Seat map not `ready` (loading or error) → blocked (`seats-not-ready`). Unreachable from the UI (no seats are rendered) but keeps the reducer safe.
   - a) No active passenger → blocked (`no-passenger`), state unchanged.
   - b) Seat occupied → blocked (`occupied`).
   - c) Seat belongs to another passenger → blocked (`taken-by-other`).
@@ -338,9 +391,9 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 - Toast messages come straight from `outcome.message`, e.g. "Seat 12C assigned to Rahul — ₹250", "Seat 4A is already occupied", "Seat 3B is taken by Passenger 2", "Select a passenger first".
 - Exit row 10 is marked with an EXIT strip (`EXIT_ROWS` in `src/data/cabin.ts`).
 - Blocked clicks return the **same state object**, so React skips the re-render.
-- Passenger count is clamped to 1–6. Growing adds "Passenger N"; shrinking removes from the end, which frees their seats and meals automatically (ownership is on the passenger). If the active passenger is removed, the last remaining one becomes active.
-- Rename: trimmed, max 30 chars, empty → "Passenger N" (N = position).
-- Switching layout regenerates seats and clears every seat assignment (seat ids differ between layouts); meals are kept.
+- Passenger count is clamped to 1–6. Growing adds "Passenger N"; shrinking removes from the end, which frees their seats and meals automatically (ownership is on the passenger). If the active passenger is removed, the last remaining one becomes active. When growing, if the active passenger already has a seat the first newly added passenger becomes active (so the next seat click seats the new person instead of moving the seated one); if the active passenger has no seat they stay active.
+- Rename: trimmed, max 30 chars, empty → "Passenger N" (N = position). `resolvePassengerName` decides; when the result differs from what was typed (empty or too long) a toast explains it.
+- Switching layout drops the seats, clears every seat assignment (seat ids differ between layouts) and reloads the new layout's seats asynchronously; meals, names and the passenger count are kept.
 - `mealsEnabled` is state (default `true`); when false, meal totals are 0 and `SELECT_MEAL` is ignored. No action toggles it yet.
 - Meals (INR): No meal ₹0, Standard Veg Sandwich Free, Paneer Tikka Wrap ₹300, Chicken Biryani ₹400 (non-veg), Fruit & Yogurt Bowl ₹200, Jain Meal ₹250. One meal per passenger; choosing the same meal again, or No meal, clears it. Meals are independent of seats (a passenger can have a meal before a seat). Meals count toward the grand total and are kept when the layout changes; removed passengers take their meal with them.
 - Shrinking the passenger count asks for confirmation only if a passenger who would be removed has a seat.
@@ -349,6 +402,24 @@ The map wrapper is `overflow-x-auto` at every size and seats are never smaller t
 - Reset asks for confirmation only when seats are assigned, and returns to 1 passenger on the default layout.
 - Seats are at least 36px wide; the map scrolls horizontally rather than shrinking.
 - Totals are computed by selectors from seats + passengers; never stored.
+- Seat map request: `fetchSeatMap` takes 600 ms and fails when the URL has `?simulateError=1` (documented in the README). `SEATS_LOADED` / `SEATS_FAILED` are accepted only while loading and only for the current layout; `RETRY_SEATS` only acts on an error. RESET keeps a loaded default-layout seat map and otherwise reloads it (so it also acts as a retry).
+
+**Polish pass: edge cases and how each is handled**
+
+| Case | Behavior |
+|---|---|
+| Click with no active passenger | Blocked by rule (a), error toast "Select a passenger first", state unchanged. The UI always has an active passenger, so this is a safety net (unit tested). |
+| Click an occupied seat / another passenger's seat | Blocked by rules (b) / (c); error toast names the seat and the owner; same state object, so no re-render. |
+| Rapid double-click on a seat | The second click (`event.detail > 1`) is ignored, so a double-click assigns once instead of assigning then releasing. Holding Enter on a focused seat is ignored too (`event.repeat`). Identical toasts replace each other instead of stacking. Plain single clicks still toggle. |
+| Rename to empty | Falls back to "Passenger N" and a toast says so. |
+| Rename to a very long name | The input caps at 30 characters with a live counter (shown from 24, red at the limit); pasted text is cut to 30; long names truncate on cards and chips and wrap in toasts, summary lines and tooltips. Emoji initials stay whole. |
+| Shrink passenger count with seated passengers | Confirm dialog states how many seated passengers go; the active passenger falls back to the last remaining one; toast afterwards. |
+| Switch layout with assignments | Confirm dialog with the count; after confirming the toast repeats how many selections were cleared; skeleton while the new map loads; a slower answer for a layout the user already left is ignored. |
+| Everyone seated | Auto-advance finds no unseated passenger and keeps the current one (no error). Re-seating or toggling off still works and keeps the same active passenger (unit tested). |
+| Seat map fails | Error card with Retry; Retry shows the skeleton again; switching layout or RESET also tries again. Passengers and meals are untouched. |
+| Meals tab open while the map loads | Loading continues (the hook lives in `MainArea`), so the map is ready when the user returns. |
+| 320 px screens | No page-level horizontal scroll. 3-2 fits; 2-3-2 is wider than the screen, so the map scrolls inside its own box and a hint appears only while it overflows. Seats stay 36 px. |
+| 1920 px screens | The page is capped at `max-w-[90rem]` and centered; the cabin stays centered in its column. |
 
 ## 10. Possible interview questions & answers
 
@@ -423,3 +494,24 @@ Structurally, `Passenger.mealId` is a single nullable field. The reducer's `sele
 
 **Why is "No meal" a card but stored as `null`?**
 It gives users an explicit option in the grid, while `null` keeps "no meal" out of the summary and totals without special cases.
+
+**How does the async seat map work without breaking the reducer rules?**
+The request lifecycle is state (`seatMapStatus`, `seats`), and three actions move it: `SEATS_LOADED`, `SEATS_FAILED`, `RETRY_SEATS`. Seat click rules are untouched; they simply cannot run until seats exist (a `seats-not-ready` guard covers the gap). The hook only performs the side effect and dispatches the result.
+
+**What stops a slow response from overwriting a newer layout?**
+Two guards. The effect cleanup ignores the result of a request that was replaced, and the reducer only accepts `SEATS_LOADED` / `SEATS_FAILED` while the status is `loading` and the action's `layoutId` equals the current one. Both are unit tested, so even without the cleanup the state stays correct.
+
+**Why is `useSeatMap` called from `MainArea` rather than `SeatMap`?**
+`SeatMap` unmounts when the Meals tab is open. Calling the hook in a component that is always mounted lets the request finish in the background.
+
+**How is the loading skeleton kept from causing layout jumps?**
+`CabinShell` (nose, column header) and `CabinRows` (rows and EXIT strips) are shared by the real cabin and the skeleton, and the skeleton seats use the same 36 px size, so the footprint matches. Only the taller extra-legroom rows shift by a few pixels when the real seats arrive.
+
+**How do you handle double-clicks without putting UI rules in the reducer?**
+The reducer's toggle rule stays pure (clicking your own seat releases it). Filtering out the *second click of a double-click* is an input concern, so `Seat` ignores clicks with `event.detail > 1` and repeated Enter key presses. Deliberate toggling with two separate clicks still works.
+
+**How did you make the animations safe for reduced motion and hydration?**
+CSS animations are declared only inside `prefers-reduced-motion: no-preference`, with a blanket `reduce` rule for transitions. The animated total is JS: `usePrefersReducedMotion` (a `useSyncExternalStore` with a `false` server snapshot) disables it, and the first render returns the real value, so server and client HTML match and no `Date.now` / `Math.random` is involved.
+
+**How did you check color contrast?**
+By computing WCAG contrast ratios for every token pair in light and dark mode. Failures (occupied ✕ at 2.9:1, seat outlines at about 2:1, white text on the dark-mode success / danger / accent fills at 2.2–3.2:1, accent text on its soft background in dark mode) were fixed by darkening tokens and adding `--success-ink` / `--danger-ink`, so text is at least 4.5:1 and seat outlines at least 3:1.

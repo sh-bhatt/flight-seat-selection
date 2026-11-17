@@ -23,7 +23,7 @@ export function BookingSuccessDialog({
     <Modal open={open} title="Booking confirmed" onClose={onClose}>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success text-white">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-success text-success-ink">
             <CheckIcon className="size-5" />
           </span>
           <p className="text-sm text-ink-muted">

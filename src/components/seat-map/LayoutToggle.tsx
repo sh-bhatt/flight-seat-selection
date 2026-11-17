@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { useBooking, useBookingActions } from '@/context/BookingContext';
-import { LAYOUT_IDS } from '@/data/layouts';
+import { LAYOUT_IDS, LAYOUTS } from '@/data/layouts';
 import { getAssignedCount } from '@/state/selectors';
 import type { LayoutId } from '@/types';
 
@@ -23,7 +23,14 @@ export function LayoutToggle() {
 
   function applyLayout(layoutId: LayoutId) {
     setLayout(layoutId);
-    showToast(`Switched to ${formatLayoutLabel(layoutId)} layout`, 'info');
+    const cleared =
+      assignedCount > 0
+        ? ` · ${assignedCount} seat ${assignedCount === 1 ? 'selection' : 'selections'} cleared`
+        : '';
+    showToast(
+      `Switched to ${formatLayoutLabel(layoutId)} layout${cleared}`,
+      'info',
+    );
   }
 
   function requestLayout(layoutId: LayoutId) {
@@ -51,6 +58,7 @@ export function LayoutToggle() {
               key={layoutId}
               type="button"
               aria-pressed={isActive}
+              aria-label={`Layout ${LAYOUTS[layoutId].label}`}
               onClick={() => requestLayout(layoutId)}
               className={`h-9 min-w-20 rounded-lg px-4 text-sm font-semibold tabular-nums transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                 isActive

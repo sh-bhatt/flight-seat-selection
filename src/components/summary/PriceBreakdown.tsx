@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { CATEGORY_LABEL } from '@/components/seat-map/seatDisplay';
+import { AnimatedAmount } from '@/components/ui/AnimatedAmount';
 import { useBooking } from '@/context/BookingContext';
 import { formatCurrency } from '@/lib/formatCurrency';
 import {
@@ -23,7 +24,7 @@ function PriceRow({
 }) {
   return (
     <li className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="min-w-0">{label}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
       <span className="shrink-0 font-medium tabular-nums">
         {formatCurrency(amount, { forceZero })}
       </span>
@@ -48,7 +49,7 @@ function TotalRow({
     >
       <dt className={isGrand ? '' : 'text-ink-muted'}>{label}</dt>
       <dd className="font-semibold tabular-nums">
-        {formatCurrency(amount, { forceZero: true })}
+        <AnimatedAmount amount={amount} />
       </dd>
     </div>
   );
