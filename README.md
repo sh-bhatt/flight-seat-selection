@@ -2,8 +2,8 @@
 
 A single-page flight booking flow: add up to six passengers, pick seats on a 3-2 or 2-3-2 aircraft, choose meals, and watch the price summary update live.
 
-- **Live demo:** LIVE_URL
-- **Screenshot:** SCREENSHOT_PLACEHOLDER
+- **Live demo:** https://flight-seat-selection-phi.vercel.app/
+- **Screenshot:** ![Screenshot](public/screenshot.png)
 
 All data is mocked and deterministic; there is no backend.
 
